@@ -1,0 +1,16 @@
+data: ./data/imagenet
+batch_size: 128
+test_batch_size: 256
+epochs: 60
+lr: 0.1
+momentum: 0.9
+no_cuda: False
+seed: 1
+log_interval: 10
+optim: sgd
+arch: resnet18
+workers: 12
+weight_decay: 1.e-4
+train_accuracy: False
+lr_decay_epoch: 30
+num_class: 1000
