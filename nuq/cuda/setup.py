@@ -24,8 +24,6 @@ setup(
         )
     ],
     cmdclass={'build_ext': BuildExtension},
-    author='Fartash Faghri',
-    author_email='faghri@cs.toronto.edu',
     description='Quantize-Dequantize cuda kernel',
     zip_safe=False,
 )
