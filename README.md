@@ -1,32 +1,44 @@
+# NUQSGD: Improved Communication Efficiency for Data-parallel SGD via Nonuniform Quantization
+
+Code for quantization methods from
+**[NUQSGD: Improved Communication Efficiency for Data-parallel SGD via 
+Nonuniform Quantization](https://arxiv.org/abs/1908.06077)**
+* A. Ramezani-Kebrya, F. Faghri, Roy D. M., arXiv preprint arXiv:1908.06077, 2019*
+
+## Dependencies
+We recommend using Anaconda to install the following packages,
+
+* Python 3.7.1
+* [PyTorch](http://pytorch.org/) (>1.1.0)
+
+## Cuda kernel installation
+
 ```
 cd nuq/cuda/;
 python setup.py install
 cd ../../
-
-python -m main.gvar --dataset imagenet --arch resnet34 --batch_size 128 \
---pretrained  --niters 10000 --epoch_iters 500 --lr 0.001 --lr_decay_epoch \
-10000 --momentum 0 --weight_decay 0 --untrain_steps 5 --untrain_lr 0.001 \
---untrain_std 0.005 --gvar_log_iter 1000 --gvar_start 0\
---g_optim  --g_optim_start 0 --g_estim sgd --logger_name runs/SGD
-
-python -m main.gvar --dataset imagenet --arch resnet34 --batch_size 128 \
---pretrained  --niters 10000 --epoch_iters 500 --lr 0.001 --lr_decay_epoch \
-10000 --momentum 0 --weight_decay 0 --untrain_steps 5 --untrain_lr 0.001 \
---untrain_std 0.005 --gvar_log_iter 1000 --gvar_start 0\
---g_optim  --g_optim_start 0 --g_estim nuq --nuq_bits 4 --nuq_bucket_size 8192 \
---nuq_ngpu 2 --nuq_method q --logger_name runs/QSGD
-
-python -m main.gvar --dataset imagenet --arch resnet34 --batch_size 128 \
---pretrained  --niters 10000 --epoch_iters 500 --lr 0.001 --lr_decay_epoch \
-10000 --momentum 0 --weight_decay 0 --untrain_steps 5 --untrain_lr 0.001 \
---untrain_std 0.005 --gvar_log_iter 1000 --gvar_start 0\
---g_optim  --g_optim_start 0 --g_estim nuq --nuq_bits 4 --nuq_bucket_size 8192 \
---nuq_ngpu 2 --nuq_method qinf --logger_name runs/QSGDinf
-
-python -m main.gvar --dataset imagenet --arch resnet34 --batch_size 128 \
---pretrained  --niters 10000 --epoch_iters 500 --lr 0.001 --lr_decay_epoch \
-10000 --momentum 0 --weight_decay 0 --untrain_steps 5 --untrain_lr 0.001 \
---untrain_std 0.005 --gvar_log_iter 1000 --gvar_start 0\
---g_optim  --g_optim_start 0 --g_estim nuq --nuq_bits 4 --nuq_bucket_size 8192 \
---nuq_ngpu 2 --nuq_method nuq --nuq_mul 0.5 --logger_name runs/NUQSGD
 ```
+
+## Running experiments in the paper
+The commands used to run the experiments can be found in `pjobs/` directory.
+These commands are generated using the `grid_run.py` script. Each experiment is 
+described using a function in the `grid/nuq.py` file.
+
+## Reference
+
+If you found this code useful, please cite the following paper:
+
+    @misc{ramezanikebrya2019nuqsgd,
+      title={{NUQSGD}: Improved Communication Efficiency for Data-parallel SGD 
+      via Nonuniform Quantization},
+      author={Ramezani-Kebrya, Ali and Faghri, Fartash and Roy, Daniel M.},
+      url={https://github.com/fartashf/nuqsgd},
+      archivePrefix={arXiv},
+      eprint={1908.06077},
+      primaryClass={cs},
+      year={2019}
+    }
+
+## License
+
+[Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0)
