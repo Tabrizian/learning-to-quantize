@@ -1,9 +1,8 @@
 # NUQSGD: Improved Communication Efficiency for Data-parallel SGD via Nonuniform Quantization
 
 Code for quantization methods from
-**[NUQSGD: Improved Communication Efficiency for Data-parallel SGD via 
-Nonuniform Quantization](https://arxiv.org/abs/1908.06077)**
-* A. Ramezani-Kebrya, F. Faghri, Roy D. M., arXiv preprint arXiv:1908.06077, 2019*
+**[NUQSGD: Improved Communication Efficiency for Data-parallel SGD via Nonuniform Quantization](https://arxiv.org/abs/1908.06077)**
+*, A. Ramezani-Kebrya, F. Faghri, Roy D. M., arXiv preprint arXiv:1908.06077, 2019*
 
 ## Dependencies
 We recommend using Anaconda to install the following packages,
