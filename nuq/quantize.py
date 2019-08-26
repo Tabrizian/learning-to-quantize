@@ -121,6 +121,47 @@ class QuantizeNumPy(object):
         return self.qdq(x, self.levels, self.bucket_size)
 
 
+class QuantizeSingleBucket(object):
+    def __init__(self, method, bits, bucket_size, **kwargs):
+        """
+        QSGD: qdqL2 + levels_uni
+        NUQSGD: qdqL2 + levels_exp
+        QSGD-inf: qdqLinf + levels_uni
+        """
+        self.method = method
+        if method == 'q':
+            self.levels = get_uniform_levels(bits)
+            self.qdq = qdqL2
+        elif method == 'nuq':
+            self.levels = get_exp_levels(bits)
+            self.qdq = qdqL2
+        elif method == 'qinf':
+            self.levels = get_uniform_levels(bits)
+            self.qdq = qdqLinf
+
+        self.bucket_size = bucket_size
+        self.bits = bits
+        self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
+        self.qdq = QDQ(self.levels)
+
+    def quantize(self, x):
+        q = x.clone()
+        bucket_size = self.bucket_size
+        num_bucket = int(np.ceil(len(x) / bucket_size))
+        for bucket_i in range(num_bucket):
+
+            start = bucket_i * bucket_size
+            end = min((bucket_i+1) * bucket_size, len(x))
+            x_bucket = x[start:end].clone()
+            q_bucket = q[start:end].clone()
+
+            norm = x_bucket.norm()
+            self.qdq.qdqGPU(x_bucket, float(norm), q_bucket)
+            q[start:end] = q_bucket
+
+        return q
+
+
 class QuantizeMultiBucket(object):
     def __init__(self, method, bits, bucket_size, multiplier, **kwargs):
         """
@@ -128,6 +169,7 @@ class QuantizeMultiBucket(object):
         NUQSGD: qdqL2 + levels_exp
         QSGD-inf: qdqLinf + levels_uni
         """
+        self.method = method
         if method == 'q':
             self.levels = get_uniform_levels(bits)
             self.norm_type = 'fro'
@@ -137,6 +179,8 @@ class QuantizeMultiBucket(object):
         elif method == 'qinf':
             self.levels = get_uniform_levels(bits)
             self.norm_type = float('inf')
+        elif method == 'none':
+            return
 
         self.bucket_size = bucket_size
         self.bits = bits
@@ -144,6 +188,8 @@ class QuantizeMultiBucket(object):
         self.qdq = QDQ(self.levels)
 
     def quantize(self, x):
+        if self.method == 'none':
+            return x
         assert isinstance(x, torch.cuda.FloatTensor)
         bucket_size = self.bucket_size
 

@@ -106,6 +106,7 @@ def add_args():
     parser.add_argument('--untrain_steps', default=0, type=int)
     parser.add_argument('--untrain_lr', default=0.001, type=float)
     parser.add_argument('--untrain_std', default=0.001, type=float)
+    parser.add_argument('--nuq_parallel', default='no', help='no|gpu1|ngpu')
     args = parser.parse_args()
     return args
 

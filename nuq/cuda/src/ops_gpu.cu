@@ -44,6 +44,6 @@ void qdqGPUKernel(float *in_vector, float *norm, float *out_vector, int n,
 {
     _qdq<<<GET_BLOCKS(n), CUDA_NUM_THREADS, 0, stream>>>(in_vector, norm,
             out_vector, n, levels, num_levels, rand_vector);
-    cudaStreamSynchronize(stream);
+    // cudaStreamSynchronize(stream);
     
 }
