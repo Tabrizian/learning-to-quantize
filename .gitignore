@@ -1,5 +1,7 @@
 data/
 jobs/
+!jobs/.gitkeep
+!jobs/log/.gitkeep
 runs/
 
 # Swap
