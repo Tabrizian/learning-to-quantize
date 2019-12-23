@@ -8,7 +8,10 @@ class DictWrapper(object):
         self.d = d
 
     def __getattr__(self, key):
-        return self.d[key]
+        if key in self.d:
+            return self.d[key]
+        else:
+            return None
 
 
 class SaveCheckpoint(object):
