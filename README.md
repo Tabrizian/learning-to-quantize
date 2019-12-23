@@ -4,6 +4,8 @@ Code for quantization methods from
 **[NUQSGD: Improved Communication Efficiency for Data-parallel SGD via Nonuniform Quantization](https://arxiv.org/abs/1908.06077)**
 *, A. Ramezani-Kebrya, F. Faghri, Roy D. M., arXiv preprint arXiv:1908.06077, 2019*
 
+
+
 ## Dependencies
 We recommend using Anaconda to install the following packages,
 
@@ -22,6 +24,12 @@ cd ../../
 The commands used to run the experiments can be found in `pjobs/` directory.
 These commands are generated using the `grid_run.py` script. Each experiment is 
 described using a function in the `grid/nuq.py` file.
+
+## Running using SLURM
+
+```
+python3 -m grid.cluster slurm 
+```
 
 ## Reference
 
