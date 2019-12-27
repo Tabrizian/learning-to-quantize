@@ -92,13 +92,8 @@ class GradientEstimator(object):
 
                 mean_estimate_layer = mean_estimate_layer[weight]
                 mean_estimate_layer.squeeze_()
-            if variance_estimate_layer.item() < 0:
-                print('WTF!')
-                import ipdb; ipdb.set_trace()
             variance = variance_estimate_layer / (gviter * number_of_weights)
-            if variance.item() < 0:
-                print('WTF!')
-                import ipdb; ipdb.set_trace()
+
             variances.append(variance)
             means.append(mean_estimate_layer)
               
