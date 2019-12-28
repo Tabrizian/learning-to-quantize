@@ -31,20 +31,20 @@ class GradientEstimator(object):
         return ret        
 
     def flatten_and_normalize(self, gradient, bucket_size=1024):
-        parameters = model.parameters()
         flattened_parameters = []
-        for layer_parameters in parameters:
+        for layer_parameters in gradient:
             flattened_parameters.append(torch.flatten(layer_parameters))
-        num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
 
+        flattened_parameters = torch.cat(flattened_parameters)
+        num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
         normalized_buckets = []
         for bucket_i in range(1, num_bucket + 1):
             x_bucket = flattened_parameters[(bucket_i - 1) * bucket_size:bucket_i * bucket_size]
-            norm = np.sqrt(x_bucket@x_bucket.T)
+            norm = torch.sqrt(x_bucket@x_bucket.T)
             normalized_buckets.append(x_bucket / norm)
-        return normalized_buckets
         
-    
+        return torch.cat(normalized_buckets)
+         
     def get_random_index(self, model, number):
         if self.random_indices == None:
             parameters = list(model.parameters())
@@ -71,7 +71,7 @@ class GradientEstimator(object):
         model: Model to be evaluated
         """
         bucket_size = 1024
-        mean_estimates_normalized = torch.zeros_like(self.flatten_and_normalize(model.parameters, bucket_size))
+        mean_estimates_normalized = torch.zeros_like(self.flatten_and_normalize(model.parameters(), bucket_size))
         # estimate grad mean and variance
         mean_estimates = [torch.zeros_like(g) for g in model.parameters()]
 
@@ -83,16 +83,14 @@ class GradientEstimator(object):
             for e, g in zip(mean_estimates, minibatch_gradient):
                 e += g
 
-            for e, g in zip(mean_estimates_normalized, minibatch_gradient_normalized):
-                e += g
+            mean_estimates_normalized += minibatch_gradient_normalized
 
 
         # Calculate the mean
         for e in mean_estimates:
             e /= gviter
         
-        for e in mean_estimates_normalized:
-            e /= gviter
+        mean_estimates_normalized /= gviter
 
         # Number of Weights
         number_of_weights = sum([layer.numel() for layer in model.parameters()])
@@ -105,14 +103,14 @@ class GradientEstimator(object):
             minibatch_gradient_normalized = self.flatten_and_normalize(minibatch_gradient, bucket_size)
 
             v = [(gg - ee).pow(2) for ee, gg in zip(mean_estimates, minibatch_gradient)]
-            v_normalized = [(gg - ee).pow(2) for ee, gg in zip(mean_estimates_normalized, minibatch_gradient_normalized)]
+            v_normalized = (mean_estimates_normalized - minibatch_gradient_normalized).pow(2)
 
             for e, g in zip(variance_estimates, v):
                 e += g
 
-            for e, g in zip(variance_estimates_normalized, v_normalized):
-                e += g
-
+            variance_estimates_normalized += v_normalized
+        
+        variance_estimates_normalized = variance_estimates_normalized / gviter
         variances = []
         means = []
         random_indices = self.get_random_index(model, 4)
@@ -138,13 +136,16 @@ class GradientEstimator(object):
         total_variance = torch.tensor(0, dtype=float)
         for variance_estimate in variance_estimates:
             total_variance += torch.sum(variance_estimate)
+        
+        total_variance = total_variance / number_of_weights
+        total_mean = total_mean / number_of_weights
 
         total_variance_normalized = torch.tensor(0, dtype=float)
         total_variance_normalized = torch.sum(variance_estimates_normalized)
         total_mean_normalized = torch.tensor(0, dtype=float)
         total_mean_normalized = torch.sum(mean_estimates_normalized)
         
-        return variances, means, total_mean, total_variance_normalized, total_mean_normalized
+        return variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized
         
 
     def get_Ege_var(self, model, gviter):
@@ -194,7 +195,6 @@ class GradientEstimator(object):
         
 
         var_e = var_e / gviter
-        print(var_e)
         # Division by gviter cancels out in ss/nn
         snr_e = sum(
                 [((ss+1e-10).log()-(nn+1e-10).log()).sum()
