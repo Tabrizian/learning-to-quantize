@@ -1,6 +1,7 @@
 import torch
 import torch.nn
 import torch.multiprocessing
+import numpy as np
 
 from data import InfiniteLoader
 
@@ -29,6 +30,21 @@ class GradientEstimator(object):
         self.data_iter = dt
         return ret        
 
+    def flatten_and_normalize(self, gradient, bucket_size=1024):
+        parameters = model.parameters()
+        flattened_parameters = []
+        for layer_parameters in parameters:
+            flattened_parameters.append(torch.flatten(layer_parameters))
+        num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
+
+        normalized_buckets = []
+        for bucket_i in range(1, num_bucket + 1):
+            x_bucket = flattened_parameters[(bucket_i - 1) * bucket_size:bucket_i * bucket_size]
+            norm = np.sqrt(x_bucket@x_bucket.T)
+            normalized_buckets.append(x_bucket / norm)
+        return normalized_buckets
+        
+    
     def get_random_index(self, model, number):
         if self.random_indices == None:
             parameters = list(model.parameters())
@@ -54,29 +70,47 @@ class GradientEstimator(object):
         gviter: Number of minibatches to apply on the model
         model: Model to be evaluated
         """
+        bucket_size = 1024
+        mean_estimates_normalized = torch.zeros_like(self.flatten_and_normalize(model.parameters, bucket_size))
         # estimate grad mean and variance
         mean_estimates = [torch.zeros_like(g) for g in model.parameters()]
 
+
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
+            minibatch_gradient_normalized = self.flatten_and_normalize(minibatch_gradient, bucket_size)
+
             for e, g in zip(mean_estimates, minibatch_gradient):
                 e += g
+
+            for e, g in zip(mean_estimates_normalized, minibatch_gradient_normalized):
+                e += g
+
 
         # Calculate the mean
         for e in mean_estimates:
             e /= gviter
+        
+        for e in mean_estimates_normalized:
+            e /= gviter
 
         # Number of Weights
         number_of_weights = sum([layer.numel() for layer in model.parameters()])
-        print(number_of_weights)
 
         variance_estimates = [torch.zeros_like(g) for g in model.parameters()]
+        variance_estimates_normalized = torch.zeros_like(mean_estimates_normalized)
 
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
+            minibatch_gradient_normalized = self.flatten_and_normalize(minibatch_gradient, bucket_size)
+
             v = [(gg - ee).pow(2) for ee, gg in zip(mean_estimates, minibatch_gradient)]
+            v_normalized = [(gg - ee).pow(2) for ee, gg in zip(mean_estimates_normalized, minibatch_gradient_normalized)]
 
             for e, g in zip(variance_estimates, v):
+                e += g
+
+            for e, g in zip(variance_estimates_normalized, v_normalized):
                 e += g
 
         variances = []
@@ -92,12 +126,25 @@ class GradientEstimator(object):
 
                 mean_estimate_layer = mean_estimate_layer[weight]
                 mean_estimate_layer.squeeze_()
-            variance = variance_estimate_layer / (gviter * number_of_weights)
+            variance = variance_estimate_layer / (gviter)
 
             variances.append(variance)
             means.append(mean_estimate_layer)
-              
-        return variances, means
+        
+        total_mean = torch.tensor(0, dtype=float)
+        for mean_estimate in mean_estimates:
+            total_mean += torch.sum(mean_estimate)
+        
+        total_variance = torch.tensor(0, dtype=float)
+        for variance_estimate in variance_estimates:
+            total_variance += torch.sum(variance_estimate)
+
+        total_variance_normalized = torch.tensor(0, dtype=float)
+        total_variance_normalized = torch.sum(variance_estimates_normalized)
+        total_mean_normalized = torch.tensor(0, dtype=float)
+        total_mean_normalized = torch.sum(mean_estimates_normalized)
+        
+        return variances, means, total_mean, total_variance_normalized, total_mean_normalized
         
 
     def get_Ege_var(self, model, gviter):
