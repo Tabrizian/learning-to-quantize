@@ -2,10 +2,14 @@ import torch
 import torch.nn
 import torch.multiprocessing
 
+from tensorboardX import SummaryWriter
+
+
 from estim.sgd import SGDEstimator
 from estim.nuq import NUQEstimator
 from estim.nuq import NUQEstimatorSingleGPUParallel
 from estim.nuq import NUQEstimatorMultiGPUParallel
+writer = SummaryWriter(logdir='multi_layer/cifar10/normalized/')
 
 
 class MinVarianceGradient(object):
@@ -45,9 +49,22 @@ class MinVarianceGradient(object):
         gviter = self.opt.gvar_estim_iter
         Ege, var_e, snr_e, nv_e = self.gest.get_Ege_var(model, gviter)
         Esgd, var_s, snr_s, nv_s = self.sgd.get_Ege_var(model, gviter)
-        bias = torch.mean(torch.cat(
-            [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
-        tb_logger.log_value('grad_bias', float(bias), step=niters)
+        variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized = self.gest.get_gradient_distribution(model, gviter)
+        # bias = torch.mean(torch.cat(
+            # [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
+        for i, mean in enumerate(means):
+            writer.add_scalar('single_weight/mean' + '/' + str(i), mean.item(), niters)
+
+        for i, variance in enumerate(variances):
+            writer.add_scalar('single_weight/variance' + '/' + str(i), torch.log(variance).item(), niters)
+
+        writer.add_scalar('total/mean', total_mean.item())
+        writer.add_scalar('total/variance', total_variance)
+        writer.add_scalar('normalized/mean', total_mean_normalized)
+        writer.add_scalar('normalized/variance', total_variance_normalized)
+
+
+        tb_logger.log_value('grad_bias', float(43), step=niters)
         tb_logger.log_value('est_var', float(var_e), step=niters)
         tb_logger.log_value('sgd_var', float(var_s), step=niters)
         tb_logger.log_value('est_snr', float(snr_e), step=niters)
@@ -58,7 +75,7 @@ class MinVarianceGradient(object):
         return ('G Bias: %.8f\t'
                 '%sSGD Var: %.8f\t %sEst Var: %.8f\t'
                 'SGD N-Var: %.8f\t Est N-Var: %.8f\t'
-                % (bias, sgd_x, var_s, est_x, var_e, nv_s, nv_e))
+                % (43, sgd_x, var_s, est_x, var_e, nv_s, nv_e))
 
     def grad(self, niters):
         model = self.model
