@@ -35,11 +35,10 @@ class GradientEstimator(object):
         flattened_parameters = []
         for layer_parameters in gradient:
             flattened_parameters.append(torch.flatten(layer_parameters))
-        flattened_parameters = torch.cat(flattened_parameters)
-        return flattened_parameters
+        return torch.cat(flattened_parameters), flattened_parameters
     
     def flatten_and_normalize(self, gradient, bucket_size=1024):
-        flattened_parameters = self.flatten(gradient)
+        flattened_parameters, less_flattened = self.flatten(gradient)
         num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
         normalized_buckets = []
         for bucket_i in range(num_bucket):
@@ -49,7 +48,18 @@ class GradientEstimator(object):
             norm = x_bucket.norm()
             normalized_buckets.append(torch.div(x_bucket, norm + torch.tensor(1e-7)))
 
-        return torch.cat(normalized_buckets)
+        unconcatenated_buckets = []
+        for layer in less_flattened:
+            num_bucket = int(np.ceil(len(layer) / bucket_size))
+            normalized_unconcatenated_buckets = []
+            for bucket_i in range(num_bucket):
+                start = bucket_i * bucket_size
+                end = min((bucket_i + 1) * bucket_size, len(layer))
+                x_bucket = layer[start:end].clone()
+                norm = x_bucket.norm()
+                normalized_unconcatenated_buckets.append(torch.div(x_bucket, norm + torch.tensor(1e-7)))
+            unconcatenated_buckets.append(torch.cat(normalized_unconcatenated_buckets))
+        return torch.cat(normalized_buckets), unconcatenated_buckets
          
     def get_random_index(self, model, number):
         if self.random_indices == None:
@@ -77,16 +87,21 @@ class GradientEstimator(object):
         model: Model to be evaluated
         """
         bucket_size = 1024
-        mean_estimates_normalized = torch.zeros_like(self.flatten_and_normalize(model.parameters(), bucket_size))
+        mean_estimates_normalized, mean_estimates_unconcatenated = self.flatten_and_normalize(model.parameters(), bucket_size)
         # estimate grad mean and variance
         mean_estimates = [torch.zeros_like(g) for g in model.parameters()]
-
+        mean_estimates_unconcatenated = [torch.zeros_like(g) for g in mean_estimates_unconcatenated]
+        mean_estimates_normalized = torch.zeros_like(mean_estimates_normalized)
 
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
-            minibatch_gradient_normalized = self.flatten_and_normalize(minibatch_gradient, bucket_size)
+            minibatch_gradient_normalized, minibatch_gradient_unconcatenated = self.flatten_and_normalize(minibatch_gradient, bucket_size)
+
 
             for e, g in zip(mean_estimates, minibatch_gradient):
+                e += g
+                
+            for e, g in zip(mean_estimates_unconcatenated, minibatch_gradient_unconcatenated):
                 e += g
 
             mean_estimates_normalized += minibatch_gradient_normalized
@@ -96,27 +111,38 @@ class GradientEstimator(object):
         for e in mean_estimates:
             e /= gviter
         
+        for e in mean_estimates_unconcatenated:
+            e /= gviter
+        
         mean_estimates_normalized /= gviter
 
         # Number of Weights
         number_of_weights = sum([layer.numel() for layer in model.parameters()])
 
         variance_estimates = [torch.zeros_like(g) for g in model.parameters()]
+        variance_estimates_unconcatenated = [torch.zeros_like(g) for g in mean_estimates_unconcatenated]
+
         variance_estimates_normalized = torch.zeros_like(mean_estimates_normalized)
 
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
-            minibatch_gradient_normalized = self.flatten_and_normalize(minibatch_gradient, bucket_size)
+            minibatch_gradient_normalized, minibatch_gradient_unconcatenated = self.flatten_and_normalize(minibatch_gradient, bucket_size)
 
             v = [(gg - ee).pow(2) for ee, gg in zip(mean_estimates, minibatch_gradient)]
             v_normalized = (mean_estimates_normalized - minibatch_gradient_normalized).pow(2)
-
+            v_normalized_unconcatenated = [(gg - ee).pow(2) for ee, gg in zip(mean_estimates_unconcatenated, minibatch_gradient_unconcatenated)]
             for e, g in zip(variance_estimates, v):
+                e += g
+
+            for e, g in zip(variance_estimates_unconcatenated, v_normalized_unconcatenated):
                 e += g
 
             variance_estimates_normalized += v_normalized
         
         variance_estimates_normalized = variance_estimates_normalized / gviter
+        for e in variance_estimates_unconcatenated:
+            e /= gviter
+        
         variances = []
         means = []
         random_indices = self.get_random_index(model, 4)
@@ -147,11 +173,13 @@ class GradientEstimator(object):
         total_mean = total_mean / number_of_weights
 
         total_variance_normalized = torch.tensor(0, dtype=float)
-        total_variance_normalized = torch.sum(variance_estimates_normalized)
+        total_variance_normalized = torch.sum(variance_estimates_normalized) / number_of_weights
         total_mean_normalized = torch.tensor(0, dtype=float)
-        total_mean_normalized = torch.sum(mean_estimates_normalized)
-        
-        return variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized
+        total_mean_normalized = torch.sum(mean_estimates_normalized) / number_of_weights
+        total_mean_unconcatenated = sum([torch.sum(mean) / mean.numel() for mean in mean_estimates_unconcatenated])
+        total_variance_unconcatenated = sum([torch.sum(variance) / variance.numel() for variance in variance_estimates_unconcatenated])
+
+        return variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated
         
 
     def get_Ege_var(self, model, gviter):

@@ -9,7 +9,7 @@ from estim.sgd import SGDEstimator
 from estim.nuq import NUQEstimator
 from estim.nuq import NUQEstimatorSingleGPUParallel
 from estim.nuq import NUQEstimatorMultiGPUParallel
-writer = SummaryWriter(logdir='multi_layer/cifar10/normalized/')
+writer = SummaryWriter(logdir='multi_layer/cifar10/unconcatenated/')
 
 
 class MinVarianceGradient(object):
@@ -49,7 +49,7 @@ class MinVarianceGradient(object):
         gviter = self.opt.gvar_estim_iter
         Ege, var_e, snr_e, nv_e = self.gest.get_Ege_var(model, gviter)
         Esgd, var_s, snr_s, nv_s = self.sgd.get_Ege_var(model, gviter)
-        variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized = self.gest.get_gradient_distribution(model, gviter)
+        variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated = self.gest.get_gradient_distribution(model, gviter)
         # bias = torch.mean(torch.cat(
             # [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
         for i, mean in enumerate(means):
@@ -61,21 +61,23 @@ class MinVarianceGradient(object):
         
         print('Total Mean:', total_mean.item())
         print('Total mean scalar:', total_mean)
-        writer.add_scalar('total/mean', total_mean.item())
+        writer.add_scalar('total/mean', total_mean.item(), niters)
 
         print('Total Variance:', total_variance.item())
         print('Total variance scalar:', total_variance)
-        writer.add_scalar('total/variance', total_variance.item())
+        writer.add_scalar('total/variance', total_variance.item(), niters)
 
         print('Normalized Mean:', total_mean_normalized.item())
         print('Total mean normalized scalar:', total_mean_normalized)
-        writer.add_scalar('normalized/mean', total_mean_normalized.item())
+        writer.add_scalar('normalized/mean', total_mean_normalized.item(), niters)
 
 
         print('Normalized Variance:', total_variance_normalized.item())
         print('Total variance normalized scalar:', total_variance_normalized)
-        writer.add_scalar('normalized/variance', total_variance_normalized.item())
+        writer.add_scalar('normalized/variance', total_variance_normalized.item(), niters)
 
+        writer.add_scalar('unconcatenated/variance', total_variance_unconcatenated.item(), niters)
+        writer.add_scalar('unconcatenated/mean', total_mean_unconcatenated.item(), niters)
 
         tb_logger.log_value('grad_bias', float(43), step=niters)
         tb_logger.log_value('est_var', float(var_e), step=niters)
