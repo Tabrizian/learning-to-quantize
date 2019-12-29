@@ -56,12 +56,25 @@ class MinVarianceGradient(object):
             writer.add_scalar('single_weight/mean' + '/' + str(i), mean.item(), niters)
 
         for i, variance in enumerate(variances):
+            print(torch.log(variance).item())
             writer.add_scalar('single_weight/variance' + '/' + str(i), torch.log(variance).item(), niters)
-
+        
+        print('Total Mean:', total_mean.item())
+        print('Total mean scalar:', total_mean)
         writer.add_scalar('total/mean', total_mean.item())
-        writer.add_scalar('total/variance', total_variance)
-        writer.add_scalar('normalized/mean', total_mean_normalized)
-        writer.add_scalar('normalized/variance', total_variance_normalized)
+
+        print('Total Variance:', total_variance.item())
+        print('Total variance scalar:', total_variance)
+        writer.add_scalar('total/variance', total_variance.item())
+
+        print('Normalized Mean:', total_mean_normalized.item())
+        print('Total mean normalized scalar:', total_mean_normalized)
+        writer.add_scalar('normalized/mean', total_mean_normalized.item())
+
+
+        print('Normalized Variance:', total_variance_normalized.item())
+        print('Total variance normalized scalar:', total_variance_normalized)
+        writer.add_scalar('normalized/variance', total_variance_normalized.item())
 
 
         tb_logger.log_value('grad_bias', float(43), step=niters)
