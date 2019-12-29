@@ -2,6 +2,7 @@ import torch
 import torch.nn
 import torch.multiprocessing
 import numpy as np
+import math
 from cuquant import qdq_gpu
 from data import InfiniteLoader
 
@@ -39,9 +40,16 @@ class GradientEstimator(object):
     
     def flatten_and_normalize(self, gradient, bucket_size=1024):
         flattened_parameters = self.flatten(gradient)
-        normalized = qdq_gpu(flattened_parameters)
-        
-        return torch.cat(normalized)
+        num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
+        normalized_buckets = []
+        for bucket_i in range(num_bucket):
+            start = bucket_i * bucket_size
+            end = min((bucket_i + 1) * bucket_size, len(flattened_parameters))
+            x_bucket = flattened_parameters[start:end].clone()
+            norm = x_bucket.norm()
+            normalized_buckets.append(torch.div(x_bucket, norm + torch.tensor(1e-7)))
+
+        return torch.cat(normalized_buckets)
          
     def get_random_index(self, model, number):
         if self.random_indices == None:
@@ -77,7 +85,6 @@ class GradientEstimator(object):
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
             minibatch_gradient_normalized = self.flatten_and_normalize(minibatch_gradient, bucket_size)
-            import ipdb; ipdb.set_trace()
 
             for e, g in zip(mean_estimates, minibatch_gradient):
                 e += g
