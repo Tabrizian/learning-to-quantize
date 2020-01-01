@@ -18,6 +18,8 @@ from args import get_opt
 from log_utils import TBXWrapper
 from log_utils import Profiler
 from estim.optim import OptimizerFactory
+from tensorboardX import SummaryWriter
+
 tb_logger = TBXWrapper()
 
 
@@ -132,6 +134,7 @@ def untrain(model, gvar, opt):
 def main():
     opt = get_opt()
     tb_logger.configure(opt.logger_name, flush_secs=5, opt=opt)
+    simple_logger = SummaryWriter('my_dir/' + opt.logger_name)
     logfname = os.path.join(opt.logger_name, 'log.txt')
     logging.basicConfig(
         filename=logfname,
@@ -161,7 +164,7 @@ def main():
 
     model = models.init_model(opt)
 
-    optimizer = OptimizerFactory(model, train_loader, tb_logger, opt)
+    optimizer = OptimizerFactory(model, train_loader, tb_logger, simple_logger, opt)
     epoch = 0
     save_checkpoint = utils.SaveCheckpoint()
 

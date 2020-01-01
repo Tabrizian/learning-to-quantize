@@ -9,7 +9,7 @@ from estim.gvar import MinVarianceGradient
 
 class OptimizerFactory(object):
 
-    def __init__(self, model, train_loader, tb_logger, opt):
+    def __init__(self, model, train_loader, tb_logger, simple_logger, opt):
         self.model = model
         self.opt = opt
         self.niters = 0
@@ -18,7 +18,7 @@ class OptimizerFactory(object):
         self.param_groups = None
         self.gest_used = False
         minvar_loader = get_minvar_loader(train_loader, opt)
-        self.gvar = MinVarianceGradient(model, minvar_loader, opt, tb_logger)
+        self.gvar = MinVarianceGradient(model, minvar_loader, opt, tb_logger, simple_logger)
         self.reset()
 
     def reset(self):
