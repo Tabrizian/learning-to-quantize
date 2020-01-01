@@ -66,7 +66,6 @@ class GradientEstimator(object):
             parameters = list(model.parameters())
             random_indices = []
             # Fix the randomization seed
-            torch.manual_seed(123)
             begin = 0
             end = int(len(parameters) / number)
             for i in range(number): 
@@ -181,11 +180,8 @@ class GradientEstimator(object):
 
         return variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated
         
-
     def get_Ege_var(self, model, gviter):
-        # estimate grad mean and variance
         Ege = [torch.zeros_like(g) for g in model.parameters()]
-
         for i in range(gviter):
             ge = self.grad_estim(model)
             for e, g in zip(Ege, ge):
@@ -194,47 +190,30 @@ class GradientEstimator(object):
         for e in Ege:
             e /= gviter
 
-        torch.manual_seed(123)
-        random_layer = torch.randint(0, len(Ege), (1,))
-        random_weight_layer_size = Ege[random_layer].shape
-        random_weight_array = []
-        for weight in random_weight_layer_size:
-            random_weight_array.append(torch.randint(0, weight, (1,)))
-
-
-        # Number of Weights
+        z = 0
+        n = 0
+        for e in Ege:
+            z += (e.abs() < self.opt.adam_eps).sum().item()
+            n += e.numel()
         nw = sum([w.numel() for w in model.parameters()])
-        var_e = [torch.zeros_like(g) for g in model.parameters()]
+        var_e = 0
         Es = [torch.zeros_like(g) for g in model.parameters()]
         En = [torch.zeros_like(g) for g in model.parameters()]
         for i in range(gviter):
             ge = self.grad_estim(model)
-            v = [(gg-ee).pow(2) for ee, gg in zip(Ege, ge)]
-            for e, g in zip(var_e, v):
-                e += g
+            v = sum([(gg-ee).pow(2).sum() for ee, gg in zip(Ege, ge)])
+            for s, e, g, n in zip(Es, Ege, ge, En):
+                s += g.pow(2)
+                n += (e-g).pow(2)
+            var_e += v/nw
 
-        # import ipdb; ipdb.set_trace()
-        
-        # This layer seems to contain some variance, most other layers are zero
-        var_e = var_e[random_layer]
-        Ege = Ege[random_layer]
-
-        for weight in random_weight_array:
-            var_e = var_e[weight]
-            var_e.squeeze_()
-
-            Ege = Ege[weight]
-            Ege.squeeze_()
-        
-        
-
-        var_e = var_e / gviter
+        var_e /= gviter
         # Division by gviter cancels out in ss/nn
         snr_e = sum(
                 [((ss+1e-10).log()-(nn+1e-10).log()).sum()
                     for ss, nn in zip(Es, En)])/nw
         nv_e = sum([(nn/(ss+1e-7)).sum() for ss, nn in zip(Es, En)])/nw
-        return Ege, var_e, snr_e, 0.00034
+        return Ege, var_e, snr_e, nv_e
 
     def state_dict(self):
         return {}
