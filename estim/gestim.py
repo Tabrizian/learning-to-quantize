@@ -176,8 +176,8 @@ class GradientEstimator(object):
         total_variance_normalized = torch.sum(variance_estimates_normalized) / number_of_weights
         total_mean_normalized = torch.tensor(0, dtype=float)
         total_mean_normalized = torch.sum(mean_estimates_normalized) / number_of_weights
-        total_mean_unconcatenated = sum([torch.sum(mean) / mean.numel() for mean in mean_estimates_unconcatenated])
-        total_variance_unconcatenated = sum([torch.sum(variance) / variance.numel() for variance in variance_estimates_unconcatenated])
+        total_mean_unconcatenated = sum([torch.sum(mean) / mean.numel() for mean in mean_estimates_unconcatenated]) / len(mean_estimates)
+        total_variance_unconcatenated = sum([torch.sum(variance) / variance.numel() for variance in variance_estimates_unconcatenated]) / len(mean_estimates)
 
         return variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated
         
