@@ -146,27 +146,27 @@ def resnet8(num_class=10, nobatchnorm=False):
                   nobatchnorm=nobatchnorm)
 
 
-def resnet20(num_class=10):
+def resnet20(num_class=10, nobatchnorm=False):
     return ResNet(BasicBlock, [3, 3, 3], num_class=num_class)
 
 
-def resnet32(num_class=10):
+def resnet32(num_class=10, nobatchnorm=False):
     return ResNet(BasicBlock, [5, 5, 5], num_class=num_class)
 
 
-def resnet44(num_class=10):
+def resnet44(num_class=10, nobatchnorm=False):
     return ResNet(BasicBlock, [7, 7, 7], num_class=num_class)
 
 
-def resnet56(num_class=10):
+def resnet56(num_class=10, nobatchnorm=False):
     return ResNet(BasicBlock, [9, 9, 9], num_class=num_class)
 
 
-def resnet110(num_class=10):
+def resnet110(num_class=10, nobatchnorm=False):
     return ResNet(BasicBlock, [18, 18, 18], num_class=num_class)
 
 
-def resnet1202(num_class=10):
+def resnet1202(num_class=10, nobatchnorm=False):
     return ResNet(BasicBlock, [200, 200, 200], num_class=num_class)
 
 
