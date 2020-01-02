@@ -97,6 +97,8 @@ def add_args():
                         default=argparse.SUPPRESS, action='store_true')
     parser.add_argument('--niters',
                         default=argparse.SUPPRESS, type=int)
+    parser.add_argument('--no_batch_norm',
+                        default=argparse.SUPPRESS, type=bool)
     # NQU
     parser.add_argument('--nuq_method', default='q', help='q|nuq|qinf')
     parser.add_argument('--nuq_bits', default=4, type=int)
