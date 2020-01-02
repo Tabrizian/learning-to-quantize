@@ -1,5 +1,5 @@
 import torch.nn as nn
-import torch.nn.functional as F
+# import torch.nn.functional as F
 
 
 class Linear(nn.Module):
@@ -9,7 +9,6 @@ class Linear(nn.Module):
 
     def forward(self, x):
         x = self.linear(x)
-        # return F.log_softmax(x, dim=-1)
         return x
 
 
@@ -20,7 +19,7 @@ class TwoLinear(nn.Module):
         self.linear2 = nn.Linear(dim, num_class)
 
     def forward(self, x):
-        x = F.relu(self.linear1(x))
+        # x = F.relu(self.linear1(x))
+        x = self.linear1(x)
         x = self.linear2(x)
-        # return F.log_softmax(x, dim=-1)
         return x

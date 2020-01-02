@@ -5,9 +5,15 @@ import torchvision.models
 
 
 class Model(nn.Module):
-    def __init__(self, arch, pretrained=False, nclass=None):
+    def __init__(self, arch, pretrained=False, nclass=None,
+                 half_trained=False):
         super(Model, self).__init__()
         model = torchvision.models.__dict__[arch](pretrained)
+        if half_trained:
+            checkpoint = torch.load('/u/faghri/imagenet/model_best.pth.tar')
+            sd = dict((k.replace('module.', ''), v)
+                      for k, v in checkpoint['state_dict'].items())
+            model.load_state_dict(sd)
         if arch.startswith('alexnet') or arch.startswith('vgg'):
             model.features = torch.nn.DataParallel(model.features)
         else:
@@ -22,4 +28,5 @@ class Model(nn.Module):
 
     def forward(self, x):
         out = self.model(x)
-        return F.log_softmax(out, dim=-1)
+        # return F.log_softmax(out, dim=-1)
+        return out

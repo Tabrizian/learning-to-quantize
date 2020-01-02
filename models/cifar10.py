@@ -58,7 +58,8 @@ class LambdaLayer(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1, option='A'):
+    def __init__(self, in_planes, planes, stride=1, option='A',
+                 nobatchnorm=False):
         super(BasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(
             in_planes, planes, kernel_size=3, stride=stride, padding=1,
@@ -67,6 +68,7 @@ class BasicBlock(nn.Module):
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
                                stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
+        self.nobatchnorm = nobatchnorm
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -86,8 +88,12 @@ class BasicBlock(nn.Module):
                 )
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        if self.nobatchnorm:
+            out = F.relu(self.conv1(x))
+            out = self.conv2(out)
+        else:
+            out = F.relu(self.bn1(self.conv1(x)))
+            out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
         out = F.relu(out)
         return out
@@ -95,9 +101,10 @@ class BasicBlock(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, num_blocks, num_class=10):
+    def __init__(self, block, num_blocks, num_class=10, nobatchnorm=False):
         super(ResNet, self).__init__()
         self.in_planes = 16
+        self.nobatchnorm = nobatchnorm
 
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3,
                                stride=1, padding=1, bias=False)
@@ -113,24 +120,30 @@ class ResNet(nn.Module):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
-            layers.append(block(self.in_planes, planes, stride))
+            layers.append(block(self.in_planes, planes, stride,
+                                nobatchnorm=self.nobatchnorm))
             self.in_planes = planes * block.expansion
 
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
+        if self.nobatchnorm:
+            out = F.relu(self.conv1(x))
+        else:
+            out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        return F.log_softmax(out, dim=-1)
+        # return F.log_softmax(out, dim=-1)
+        return out
 
 
-def resnet8(num_class=10):
-    return ResNet(BasicBlock, [1, 1, 1], num_class=num_class)
+def resnet8(num_class=10, nobatchnorm=False):
+    return ResNet(BasicBlock, [1, 1, 1], num_class=num_class,
+                  nobatchnorm=nobatchnorm)
 
 
 def resnet20(num_class=10):
@@ -199,7 +212,8 @@ class Convnet(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        return F.log_softmax(x, dim=-1)
+        # return F.log_softmax(x, dim=-1)
+        return x
 
 
 class MLP(nn.Module):
@@ -228,7 +242,143 @@ class MLP(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc4(x)
-        return F.log_softmax(x, dim=-1)
+        # return F.log_softmax(x, dim=-1)
+        return x
+
+
+class SmallMLP(nn.Module):
+    def __init__(self, dropout=True, num_class=10):
+        """
+        mnist MLP
+        """
+        super(SmallMLP, self).__init__()
+        self.dropout = dropout
+        self.fc1 = nn.Linear(3*32*32, 512)
+        self.fc2 = nn.Linear(512, num_class)
+
+    def forward(self, x):
+        x = x.view(-1, 3*32*32)
+        if self.dropout:
+            x = F.dropout(x, training=self.training, p=0.2)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        # return F.log_softmax(x, dim=-1)
+        return x
+
+
+class MoreSmallMLP(nn.Module):
+    def __init__(self, dropout=True, num_class=10):
+        """
+        mnist MLP
+        """
+        super(MoreSmallMLP, self).__init__()
+        self.dropout = dropout
+        self.fc1 = nn.Linear(3*32*32, 128)
+        self.fc2 = nn.Linear(128, num_class)
+
+    def forward(self, x):
+        x = x.view(-1, 3*32*32)
+        if self.dropout:
+            x = F.dropout(x, training=self.training, p=0.2)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        # return F.log_softmax(x, dim=-1)
+        return x
+
+
+class SuperSmallMLP(nn.Module):
+    def __init__(self, dropout=True, num_class=10):
+        """
+        mnist MLP
+        """
+        super(SuperSmallMLP, self).__init__()
+        self.fc1 = nn.Linear(3*32*32, num_class)
+
+    def forward(self, x):
+        x = x.view(-1, 3*32*32)
+        x = self.fc1(x)
+        # return F.log_softmax(x, dim=-1)
+        return x
+
+
+class SmallCNN(nn.Module):
+    def __init__(self, dropout=False, num_class=10):
+        """
+        async kfac's cnn
+        """
+        super(SmallCNN, self).__init__()
+        self.dropout = dropout
+        # self.input_drop = nn.Dropout2d(p=0.2)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=5, padding=2)
+        # self.conv2 = nn.Conv2d(64, 128, kernel_size=5)
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=5, padding=2)
+        self.fc1 = nn.Linear(64*4*4, num_class)  # 1000)
+        # self.fc2 = nn.Linear(1000, num_class)
+
+    def forward(self, x):
+        if self.dropout:
+            x = F.dropout2d(x, training=self.training, p=0.2)
+        x = F.relu(F.max_pool2d(self.conv1(x), 3, stride=2, padding=1))
+        x = F.relu(F.max_pool2d(self.conv2(x), 3, stride=2, padding=1))
+        x = F.relu(F.max_pool2d(self.conv3(x), 3, stride=2, padding=1))
+        x = x.view(-1, 64*4*4)
+        if self.dropout:
+            x = F.dropout(x, training=self.training)
+        x = F.relu(self.fc1(x))
+        # if self.dropout:
+        #     x = F.dropout(x, training=self.training)
+        # x = self.fc2(x)
+        # return F.log_softmax(x, dim=-1)
+        return x
+
+
+class SuperSmallCNN(nn.Module):
+    def __init__(self, dropout=False, num_class=10):
+        """
+        smaller than small cnn
+        """
+        super(SuperSmallCNN, self).__init__()
+        self.dropout = dropout
+        # self.input_drop = nn.Dropout2d(p=0.2)
+        self.conv1 = nn.Conv2d(3, 8, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(8, 8, kernel_size=5, padding=2)
+        # self.conv2 = nn.Conv2d(64, 128, kernel_size=5)
+        self.conv3 = nn.Conv2d(8, 16, kernel_size=5, padding=2)
+        self.fc1 = nn.Linear(16*4*4, num_class)  # 1000)
+        # self.fc2 = nn.Linear(1000, num_class)
+
+    def forward(self, x):
+        if self.dropout:
+            x = F.dropout2d(x, training=self.training, p=0.2)
+        x = F.relu(F.max_pool2d(self.conv1(x), 3, stride=2, padding=1))
+        x = F.relu(F.max_pool2d(self.conv2(x), 3, stride=2, padding=1))
+        x = F.relu(F.max_pool2d(self.conv3(x), 3, stride=2, padding=1))
+        x = x.view(-1, 16*4*4)
+        if self.dropout:
+            x = F.dropout(x, training=self.training)
+        x = F.relu(self.fc1(x))
+        # if self.dropout:
+        #     x = F.dropout(x, training=self.training)
+        # x = self.fc2(x)
+        # return F.log_softmax(x, dim=-1)
+        return x
+
+
+class LP(nn.Module):
+    def __init__(self, dropout=False, num_class=10):
+        """
+        mnist MLP
+        """
+        super(LP, self).__init__()
+        self.dropout = dropout
+        self.fc1 = nn.Linear(3*32*32, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 3*32*32)
+        x = F.relu(self.fc1(x))
+        # return F.log_softmax(x, dim=-1)
+        return x
 
 
 if __name__ == "__main__":
