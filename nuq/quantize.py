@@ -81,7 +81,7 @@ def qdqLinf(x, levels, bucket_size=1024):
 
         x_bucket = x[(bucket_i - 1) * bucket_size:bucket_i * bucket_size]
 
-        max_val = x_bucket.max(0)
+        max_val = x_bucket.abs().max(0)
         uni_rand = np.random.rand(len(x_bucket))
         for i in range(len(x_bucket)):
             j = 0
