@@ -52,7 +52,7 @@ def init_model(opt):
                 depth, opt.num_class, widen_factor, 0.3)
         else:
             model = models.cifar10.__dict__[opt.arch](
-                num_class=opt.num_class)
+                num_class=opt.num_class, nobatchnorm=True)
         model = torch.nn.DataParallel(model)
     elif opt.dataset == 'imagenet':
         model = models.imagenet.Model(opt.arch, opt.pretrained,

@@ -1,8 +1,6 @@
 import torch
 import torch.nn.functional as F
 
-from cusvd import svdj
-
 
 class Loss(object):
     def __call__(self, model, data,
