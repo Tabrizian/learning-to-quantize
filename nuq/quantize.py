@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from cuquant import QDQ
 import math
+from scipy.stats import truncnorm
+
 
 
 def get_uniform_levels(bits):
@@ -9,6 +11,37 @@ def get_uniform_levels(bits):
     num_levels = 2 << bits - 1
     levels_uni = np.linspace(-1, 1, num=num_levels)
     return levels_uni
+
+def get_quantile_levels(bits, mean, sigma):
+    """quantile levels """
+    cdf_points = np.linspace(0, 1, num=number_of_levels)
+    levels = [truncnorm.ppf(level, -1, 1, loc=mean, scale=sigma) for level in cdf_points]
+    return levels
+
+def get_adaptive_levels_co(number_of_levels, mean, sigma, epochs):
+    """Adaptive Levels"""
+    num_levels = 2 << bits - 1
+    initial_levels = get_quantile_levels(num_levels)
+    losses = []
+    new_levels = np.zeros_like(initial_levels)
+    new_levels[0] = initial_levels[0]
+    new_levels[-1] = initial_levels[-1]
+    all_levels = [initial_levels]
+    for epoch in range(epochs):
+        indexes = list(range(len(initial_levels)))[1:-1]
+        for index in indexes:
+            a = (initial_levels[index - 1] - mean) / (initial_levels[index + 1] - initial_levels[index - 1])
+            b = truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) - truncnorm.cdf(initial_levels[index - 1], minimum, maximum, loc=mean, scale=sigma)
+            c = (truncnorm.pdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) - truncnorm.pdf(initial_levels[index - 1], minimum, maximum, loc=mean, scale=sigma)) / (initial_levels[index + 1] - initial_levels[index - 1])
+            new_levels[index] = truncnorm.ppf(
+                truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) + a * b + sigma ** 2 * c, minimum, maximum, loc=mean, scale=sigma
+                )
+
+        losses.append(calculate_estimated_error(mean, sigma, new_levels))
+        print('Epoch', epoch, 'error', losses[-1])
+        initial_levels = new_levels
+        all_levels.append(initial_levels)
+    return new_levels
 
 
 def get_exp_levels(bits, multiplier):
@@ -47,27 +80,32 @@ def qdqL2(x, levels, bucket_size=1024):
     you can remove np.asarray at the end and it becomes a
     pythonlist
     """
+    assert isinstance(x, torch.cuda.FloatTensor)
 
-    num_bucket = int(np.ceil(len(x) / bucket_size))
-    quant = []
-    for bucket_i in range(1, num_bucket + 1):
+    num_tail = math.ceil(x.numel()/bucket_size)*bucket_size-x.numel()
+    xv = torch.cat((x.view(-1),
+                    torch.zeros(num_tail, dtype=x.dtype, device=x.device)))
+    xv = xv.view(-1, bucket_size)
+    norm = xv.norm(p='fro', dim=1, keepdim=True).expand(
+        xv.shape[0], xv.shape[1]).contiguous().view(-1).contiguous()
+    out_vector = torch.zeros_like(x)
+    r = torch.randint_like(x, 1000001).long()
+    bucket_size = self.bucket_size
 
-        x_bucket = x[(bucket_i - 1) * bucket_size:bucket_i * bucket_size]
-
-        norm = np.sqrt(x_bucket@x_bucket.T)
-        uni_rand = np.random.rand(len(x_bucket))
-        for i in range(len(x_bucket)):
-            j = 0
-            while j + 1 < len(levels):
-                level_up = levels[j + 1]
-                if x_bucket[i] / norm <= level_up:
-                    diff = level_up - levels[j]
-                    if x_bucket[i] / norm + diff * uni_rand[i] > level_up:
-                        j = j + 1
-                    break
-                j = j + 1
-            quant.append(norm * levels[j])
-    return np.asarray(quant)
+    in_vector = x
+    rand_vector = r
+    j = 0
+    for i, val in enumerate(in_vector):
+        while (j+1 < num_levels):
+            level_up =  levels[j+1]
+            if in_vector[i]/(norm[i]+EPS)<=level_up:
+                diff = level_up - levels[j];	
+                if in_vector[i]/(norm[i]+EPS)+diff*(rand_vector[i]%1000001 / 1000000.0)>level_up:
+                    j = j+1
+                break
+            j = j+1			
+        out_vector[i] = norm[i]*levels[j];	 
+    return out_vector
 
 
 def qdqLinf(x, levels, bucket_size=1024):
@@ -75,26 +113,34 @@ def qdqLinf(x, levels, bucket_size=1024):
     Quantize and dequantize with L-inf norm.
     """
 
-    num_bucket = int(np.ceil(len(x) / bucket_size))
-    quant = []
-    for bucket_i in range(1, num_bucket + 1):
+    assert isinstance(x, torch.cuda.FloatTensor)
 
-        x_bucket = x[(bucket_i - 1) * bucket_size:bucket_i * bucket_size]
+    num_tail = math.ceil(x.numel()/bucket_size)*bucket_size-x.numel()
+    xv = torch.cat((x.view(-1),
+                    torch.zeros(num_tail, dtype=x.dtype, device=x.device)))
+    xv = xv.view(-1, bucket_size)
+    norm = xv.norm(p=float('inf'), dim=1, keepdim=True).expand(
+        xv.shape[0], xv.shape[1]).contiguous().view(-1).contiguous()
+    out_vector = torch.zeros_like(x)
+    r = torch.randint_like(x, 1000001).long()
+    bucket_size = self.bucket_size
 
-        max_val = x_bucket.abs().max(0)
-        uni_rand = np.random.rand(len(x_bucket))
-        for i in range(len(x_bucket)):
-            j = 0
-            while j + 1 < len(levels):
-                level_up = levels[j + 1]
-                if x_bucket[i] / max_val <= level_up:
-                    diff = level_up - levels[j]
-                    if x_bucket[i] / max_val + diff * uni_rand[i] > level_up:
-                        j = j + 1
-                    break
-                j = j + 1
-            quant.append(max_val * levels[j])
-    return np.asarray(quant)
+    in_vector = x
+    rand_vector = r
+    j = 0
+    for i, val in enumerate(in_vector):
+        while (j+1 < num_levels):
+            level_up =  levels[j+1]
+            if in_vector[i]/(norm[i]+EPS)<=level_up:
+                diff = level_up - levels[j];	
+                if in_vector[i]/(norm[i]+EPS)+diff*(rand_vector[i]%1000001 / 1000000.0)>level_up:
+                    j = j+1
+                break
+            j = j+1			
+        out_vector[i] = norm[i]*levels[j];	 
+    return out_vector
+
+
 
 
 class QuantizeNumPy(object):
@@ -103,6 +149,7 @@ class QuantizeNumPy(object):
         QSGD: qdqL2 + levels_uni
         NUQSGD: qdqL2 + levels_exp
         QSGD-inf: qdqLinf + levels_uni
+        NUQ 2.0: Apadtive Normalized Layers
         """
         if method == 'q':
             self.levels = get_uniform_levels(bits)
@@ -113,12 +160,19 @@ class QuantizeNumPy(object):
         elif method == 'qinf':
             self.levels = get_uniform_levels(bits)
             self.qdq = qdqLinf
+        elif method == 'nuq2':
+            self.levels = get_adaptive_normalized_layers(bits)
+            self.qdq = qdqL2
+        elif method == 'nuq2inf':
+            self.levels = get_adaptive_normalized_layers(bits)
+            self.qdq = qdqLinf
+
 
         self.bucket_size = bucket_size
         self.bits = bits
 
-    def quantize(self, x):
-        return self.qdq(x, self.levels, self.bucket_size)
+    def quantize(self, x, in_place):
+        return self.qdq(x, self.levels, self.bucket_size, in_place)
 
 
 class QuantizeSingleBucket(object):
