@@ -36,7 +36,7 @@ class NUQEstimator(GradientEstimator):
 
             with torch.no_grad():
                 for g, a in zip(grad, self.acc_grad):
-                    a += self.qdq.quantize(g)/self.ngpu
+                    a += self.qdq.quantize(g, in_place)/self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
@@ -84,7 +84,7 @@ class NUQEstimatorSingleGPUParallel(GradientEstimator):
         for i in range(self.ngpu):
             with torch.no_grad():
                 for p in models[i].parameters():
-                    p.grad.copy_(self.qdq.quantize(p.grad)/self.ngpu)
+                    p.grad.copy_(self.qdq.quantize(p.grad, in_place)/self.ngpu)
 
         # aggregate grads into gpu0
         for i in range(1, self.ngpu):
@@ -149,7 +149,7 @@ class NUQEstimatorMultiGPUParallel(GradientEstimator):
                 with torch.cuda.device(i):
                     torch.cuda.synchronize()
                     for p in models[i].parameters():
-                        p.grad.copy_(self.qdq[i].quantize(p.grad)/self.ngpu)
+                        p.grad.copy_(self.qdq[i].quantize(p.grad, in_place)/self.ngpu)
 
         # aggregate grads into gpu0
         for i in range(1, self.ngpu):
