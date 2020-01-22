@@ -4,7 +4,7 @@ from cuquant import QDQ
 import math
 from scipy.stats import truncnorm
 
-
+EPS = 1e-7
 
 def get_uniform_levels(bits):
     """uniform (QSGD)"""
@@ -108,7 +108,7 @@ def qdqL2(x, levels, bucket_size=1024):
     return out_vector
 
 
-def qdqLinf(x, levels, bucket_size=1024):
+def qdqLinf(x, levels, bucket_size=1024, in_place):
     """
     Quantize and dequantize with L-inf norm.
     """
@@ -132,7 +132,7 @@ def qdqLinf(x, levels, bucket_size=1024):
         while (j+1 < num_levels):
             level_up =  levels[j+1]
             if in_vector[i]/(norm[i]+EPS)<=level_up:
-                diff = level_up - levels[j];	
+                diff = level_up - levels[j]
                 if in_vector[i]/(norm[i]+EPS)+diff*(rand_vector[i]%1000001 / 1000000.0)>level_up:
                     j = j+1
                 break
