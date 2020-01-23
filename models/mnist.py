@@ -25,8 +25,7 @@ class MNISTNet(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        # return F.log_softmax(x, dim=-1)
-        return x
+        return F.log_softmax(x, dim=-1)
 
 
 class Convnet(nn.Module):
@@ -55,8 +54,7 @@ class Convnet(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        # return F.log_softmax(x, dim=-1)
-        return x
+        return F.log_softmax(x, dim=-1)
 
 
 class BigConvnet(nn.Module):
@@ -83,8 +81,7 @@ class BigConvnet(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        # return F.log_softmax(x, dim=-1)
-        return x
+        return F.log_softmax(x, dim=-1)
 
 
 class MLP(nn.Module):
@@ -144,8 +141,7 @@ class SmallMLP(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc4(x)
-        # return F.log_softmax(x, dim=-1)
-        return x
+        return F.log_softmax(x, dim=-1)
 
 
 class SuperSmallMLP(nn.Module):
@@ -174,5 +170,4 @@ class SuperSmallMLP(nn.Module):
         if self.dropout:
             x = F.dropout(x, training=self.training)
         x = self.fc4(x)
-        # return F.log_softmax(x, dim=-1)
-        return x
+        return F.log_softmax(x, dim=-1)
