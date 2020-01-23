@@ -3,6 +3,7 @@ import torch
 from cuquant import QDQ
 import math
 from scipy.stats import truncnorm
+import scipy.integrate as integrate
 
 EPS = 1e-7
 
@@ -17,12 +18,33 @@ def get_quantile_levels(bits, mean, sigma):
     num_levels = 2 << bits - 1
     cdf_points = np.linspace(0, 1, num=num_levels)
     levels = [truncnorm.ppf(level, -1, 1, loc=mean, scale=sigma) for level in cdf_points]
+    levels[0] = -1
+    levels[-1] = 1
     return levels
 
-def get_adaptive_levels_co(number_of_levels, mean, sigma, epochs):
-    """Adaptive Levels"""
-    num_levels = 2 << bits - 1
-    initial_levels = get_quantile_levels(num_levels)
+def get_level(x, levels):
+    for index, level in enumerate(levels[0:len(levels) - 1]):
+        if x >= levels[index] and x < levels[index + 1]:
+            return index
+
+def normal_function(x, mean, sigma):
+    f = truncnorm.pdf(x, -1, 1, loc=mean, scale=sigma)
+    return f
+
+def calculate_estimated_error(mean, sigma, levels):
+    sum = []
+    for index, level in enumerate(levels[:-1]):
+        def inline_func(x):
+            normal_func = normal_function(x, mean, sigma)
+            index_level = get_level(x, levels)
+            variance = (x - levels[index_level]) * (levels[index_level + 1] - x)
+            return variance * normal_func
+
+        sum.append(integrate.quad(lambda x: inline_func(x), levels[index], levels[index + 1]))
+
+    return np.sum(sum)
+
+def get_adaptive_levels_co(initial_levels, number_of_levels, mean, sigma, epochs, minimum, maximum):
     losses = []
     new_levels = np.zeros_like(initial_levels)
     new_levels[0] = initial_levels[0]
@@ -34,15 +56,15 @@ def get_adaptive_levels_co(number_of_levels, mean, sigma, epochs):
             a = (initial_levels[index - 1] - mean) / (initial_levels[index + 1] - initial_levels[index - 1])
             b = truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) - truncnorm.cdf(initial_levels[index - 1], minimum, maximum, loc=mean, scale=sigma)
             c = (truncnorm.pdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) - truncnorm.pdf(initial_levels[index - 1], minimum, maximum, loc=mean, scale=sigma)) / (initial_levels[index + 1] - initial_levels[index - 1])
-            new_levels[index] = truncnorm.ppf(
+            initial_levels[index] = truncnorm.ppf(
                 truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) + a * b + sigma ** 2 * c, minimum, maximum, loc=mean, scale=sigma
                 )
 
-        losses.append(calculate_estimated_error(mean, sigma, new_levels))
+        losses.append(calculate_estimated_error(mean, sigma, initial_levels))
         print('Epoch', epoch, 'error', losses[-1])
-        initial_levels = new_levels
+        # initial_levels = new_levels
         all_levels.append(initial_levels)
-    return new_levels
+    return initial_levels, all_levels, losses
 
 
 def get_exp_levels(bits, multiplier):
@@ -143,8 +165,6 @@ def qdqLinf(x, levels, bucket_size, in_place):
     return out_vector
 
 
-
-
 class QuantizeNumPy(object):
     def __init__(self, method, bits, bucket_size, **kwargs):
         """
@@ -168,13 +188,30 @@ class QuantizeNumPy(object):
         elif method == 'nuq2inf':
             self.levels = get_quantile_levels(bits, 0, 0.1)
             self.qdq = qdqLinf
-
+        self.number_of_iterations = 0
+        self.x = []
 
         self.bucket_size = bucket_size
         self.bits = bits
 
     def quantize(self, x, in_place):
+        self.number_of_iterations += 1
+        if in_place = True:
+            self.x.append(x.view(-1))
+        print('Quantize number is', self.number_of_iterations)
+        if self.number_of_iterations == 10:
+            mean, variance = self.calculate_mean_variance(self.x)
+            initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
+            self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), 10, -1, 1)
+            self.x = []
+            self.number_of_iterations = 0
         return self.qdq(x, self.levels, self.bucket_size, in_place)
+
+    def calculate_mean_variance(self, x):
+        mean = torch.cat(self.x).mean()
+        variance = torch.sum((torch.cat(self.x) - mean)**2)/len(torch.cat(self.x))
+        return mean, variance
+        
 
 
 class QuantizeSingleBucket(object):
