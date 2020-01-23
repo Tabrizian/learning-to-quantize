@@ -37,7 +37,7 @@ class NUQEstimator(GradientEstimator):
 
             with torch.no_grad():
                 for g, a in zip(grad, self.acc_grad):
-                    a += self.qdq.quantize(g, in_place)/self.ngpu
+                    a += self.qdq.quantize(g, in_place) / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
