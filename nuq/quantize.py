@@ -117,7 +117,7 @@ def qdqL2(x, levels, bucket_size, in_place):
     out_vector = torch.zeros_like(in_vector)
     rand_vector = torch.flatten(r)
     j = 0
-    for i, val in enumerate(in_vector):
+    for i, val in enumerate(x):
         while (j+1 < num_levels):
             level_up =  levels[j+1]
             if in_vector[i]/(norm[i]+EPS)<=level_up:
@@ -189,27 +189,42 @@ class QuantizeNumPy(object):
             self.levels = get_quantile_levels(bits, 0, 0.1)
             self.qdq = qdqLinf
         self.number_of_iterations = 0
-        self.x = []
+        self.gradient_samples = []
+        self.gradient_samples_overtime = []
 
         self.bucket_size = bucket_size
         self.bits = bits
 
     def quantize(self, x, in_place):
-        self.number_of_iterations += 1
-        if in_place = True:
-            self.x.append(x.view(-1))
-        print('Quantize number is', self.number_of_iterations)
-        if self.number_of_iterations == 10:
-            mean, variance = self.calculate_mean_variance(self.x)
-            initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
-            self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), 10, -1, 1)
-            self.x = []
-            self.number_of_iterations = 0
+        if in_place == True:
+            self.number_of_iterations += 1
+            self.gradient_samples.append(x.view(-1))
+            if self.number_of_iterations % 24 == 0:
+                self.gradient_samples_overtime.append(torch.cat(self.gradient_samples))
+                self.gradient_samples = []
+                if self.number_of_iterations == 24 * 40:
+                    self.number_of_iterations = 0
+                    mean, variance = self.calculate_mean_variance(self.gradient_samples_overtime)
+                    print('Mean is', mean, 'Variance is', variance)
+                    initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
+                    self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), 10, -1, 1)
+                    self.gradient_samples_overtime = []
         return self.qdq(x, self.levels, self.bucket_size, in_place)
 
     def calculate_mean_variance(self, x):
-        mean = torch.cat(self.x).mean()
-        variance = torch.sum((torch.cat(self.x) - mean)**2)/len(torch.cat(self.x))
+        sum = torch.zeros_like(x[0])
+        for epoch in x:
+            sum += epoch
+        mean = sum / len(x)
+
+        variance = torch.zeros_like(x[0])
+        for epoch in x:
+            variance += (epoch - sum) ** 2
+        variance = variance / len(x)
+        number_of_weights = len(variance)
+
+        variance = torch.sum(variance) / number_of_weights
+        mean = torch.sum(mean) / number_of_weights
         return mean, variance
         
 
