@@ -28,11 +28,9 @@ class NUQEstimator(GradientEstimator):
                 a.zero_()
 
         for i in range(self.ngpu):
-            print('Salammm', i)
             model.zero_grad()
             data = next(self.data_iter)
             loss = model.criterion(model, data)
-            print('Shape of loss', loss.shape)
             grad = torch.autograd.grad(loss, model.parameters())
 
             with torch.no_grad():
