@@ -4,14 +4,14 @@ import torch.multiprocessing
 
 from args import opt_to_nuq_kwargs
 from .gestim import GradientEstimator
-from nuq.quantize import QuantizeNumPy
+from nuq.quantize import QuantizeMultiBucket
 
 
 class NUQEstimator(GradientEstimator):
     def __init__(self, *args, **kwargs):
         super(NUQEstimator, self).__init__(*args, **kwargs)
         self.init_data_iter()
-        self.qdq = QuantizeNumPy(**opt_to_nuq_kwargs(self.opt))
+        self.qdq = QuantizeMultiBucket(**opt_to_nuq_kwargs(self.opt))
         self.ngpu = self.opt.nuq_ngpu
         self.acc_grad = None
 

@@ -16,7 +16,7 @@ def get_uniform_levels(bits):
 def get_quantile_levels(bits, mean, sigma):
     """quantile levels """
     num_levels = 2 << bits - 1
-    cdf_points = np.linspace(0, 1, num=num_levels)
+    cdf_points = np.linspace(0, 1, num=num_levels - 2)
     levels = [truncnorm.ppf(level, -1, 1, loc=mean, scale=sigma) for level in cdf_points]
     levels[0] = -1
     levels[-1] = 1
@@ -203,12 +203,14 @@ class QuantizeNumPy(object):
                 self.gradient_samples_overtime.append(torch.cat(self.gradient_samples))
                 self.gradient_samples = []
                 if self.number_of_iterations == 24 * 40:
+                    print('Creating new levels')
                     self.number_of_iterations = 0
                     mean, variance = self.calculate_mean_variance(self.gradient_samples_overtime)
                     print('Mean is', mean, 'Variance is', variance)
                     initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
                     self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), 10, -1, 1)
                     self.gradient_samples_overtime = []
+        import ipdb; ipdb.set_trace()
         return self.qdq(x, self.levels, self.bucket_size, in_place)
 
     def calculate_mean_variance(self, x):
@@ -287,17 +289,57 @@ class QuantizeMultiBucket(object):
         elif method == 'qinf':
             self.levels = get_uniform_levels(bits)
             self.norm_type = float('inf')
+        elif method == 'nuq2':
+            self.levels = get_quantile_levels(bits, 0, 0.1)
+            self.norm_type = 'fro'
+        elif method == 'nuq2inf':
+            self.levels = get_quantile_levels(bits, 0, 0.1)
+            self.norm_type = float('inf')
         elif method == 'none':
             return
+
+        self.number_of_iterations = 0
+        self.gradient_samples = []
+        self.gradient_samples_overtime = []
 
         self.bucket_size = bucket_size
         self.bits = bits
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
 
-    def quantize(self, x):
+    def calculate_mean_variance(self, x):
+        sum = torch.zeros_like(x[0])
+        for epoch in x:
+            sum += epoch
+        mean = sum / len(x)
+
+        variance = torch.zeros_like(x[0])
+        for epoch in x:
+            variance += (epoch - sum) ** 2
+        variance = variance / len(x)
+        number_of_weights = len(variance)
+
+        variance = torch.sum(variance) / number_of_weights
+        mean = torch.sum(mean) / number_of_weights
+        return mean, variance
+
+    def quantize(self, x, in_place):
         if self.method == 'none':
             return x
+        if in_place == True and (self.method == 'nuq2' or self.method == 'nuq2inf'):
+            self.number_of_iterations += 1
+            self.gradient_samples.append(x.view(-1))
+            if self.number_of_iterations % 24 == 0:
+                self.gradient_samples_overtime.append(torch.cat(self.gradient_samples))
+                self.gradient_samples = []
+                if self.number_of_iterations == 24 * 40:
+                    self.number_of_iterations = 0
+                    mean, variance = self.calculate_mean_variance(self.gradient_samples_overtime)
+                    print('Mean is', mean, 'Variance is', variance)
+                    initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
+                    self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), 2, -1, 1)
+                    self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
+                    self.gradient_samples_overtime = []
         assert isinstance(x, torch.cuda.FloatTensor)
         bucket_size = self.bucket_size
 
