@@ -32,10 +32,11 @@ class NUQEstimator(GradientEstimator):
             data = next(self.data_iter)
             loss = model.criterion(model, data)
             grad = torch.autograd.grad(loss, model.parameters())
+            layers = len(list(model.parameters()))
 
             with torch.no_grad():
                 for g, a in zip(grad, self.acc_grad):
-                    a += self.qdq.quantize(g, in_place) / self.ngpu
+                    a += self.qdq.quantize(g, in_place, layers) / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
