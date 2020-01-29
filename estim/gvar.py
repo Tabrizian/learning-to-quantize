@@ -51,8 +51,8 @@ class MinVarianceGradient(object):
         Ege, var_e, snr_e, nv_e = self.gest.get_Ege_var(model, gviter)
         Esgd, var_s, snr_s, nv_s = self.sgd.get_Ege_var(model, gviter)
         variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated = self.gest.get_gradient_distribution(model, gviter)
-        # bias = torch.mean(torch.cat(
-            # [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
+        bias = torch.mean(torch.cat(
+            [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
         for i, mean in enumerate(means):
             writer.add_scalar('single_weight/mean' + '/' + str(i), mean.item(), niters)
 
@@ -80,7 +80,7 @@ class MinVarianceGradient(object):
         writer.add_scalar('unconcatenated/variance', total_variance_unconcatenated.item(), niters)
         writer.add_scalar('unconcatenated/mean', total_mean_unconcatenated.item(), niters)
 
-        tb_logger.log_value('grad_bias', float(43), step=niters)
+        tb_logger.log_value('grad_bias', float(bias), step=niters)
         tb_logger.log_value('est_var', float(var_e), step=niters)
         tb_logger.log_value('sgd_var', float(var_s), step=niters)
         tb_logger.log_value('est_snr', float(snr_e), step=niters)
