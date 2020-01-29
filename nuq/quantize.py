@@ -316,8 +316,8 @@ class QuantizeMultiBucket(object):
         self.variance = variance
 
     def update_levels(self):
-        initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), self.variance.cpu())
-        self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), self.variance.cpu(), self.co_epochs, -1, 1)
+        initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()))
+        self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, -1, 1)
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
 
 
