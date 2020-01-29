@@ -304,11 +304,22 @@ class QuantizeMultiBucket(object):
 
         self.bucket_size = bucket_size
         self.bits = bits
-        self.frequency = kwargs['frequency']
         self.co_epochs = kwargs['cd_epochs']
         print('kwargs is equal to:', kwargs)
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
+        self.mean = 0
+        self.variance = 0.1
+
+    def set_mean_variance(self, mean, variance):
+        self.mean = mean
+        self.variance = variance
+
+    def update_levels(self):
+        initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), self.variance.cpu())
+        self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), self.variance.cpu(), self.co_epochs, -1, 1)
+        self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
+
 
     def calculate_mean_variance(self, x):
         sum = torch.zeros_like(x[0])
@@ -326,23 +337,9 @@ class QuantizeMultiBucket(object):
         mean = torch.sum(mean) / number_of_weights
         return mean, variance
 
-    def quantize(self, x, in_place, number_of_layers):
+    def quantize(self, x, number_of_layers):
         if self.method == 'none':
             return x
-        if in_place == True and (self.method == 'nuq2' or self.method == 'nuq2inf'):
-            self.number_of_iterations += 1
-            self.gradient_samples.append(x.view(-1))
-            if self.number_of_iterations % number_of_layers == 0:
-                self.gradient_samples_overtime.append(torch.cat(self.gradient_samples))
-                self.gradient_samples = []
-                if self.number_of_iterations == number_of_layers * self.frequency:
-                    self.number_of_iterations = 0
-                    mean, variance = self.calculate_mean_variance(self.gradient_samples_overtime)
-                    print('Mean is', mean, 'Variance is', variance)
-                    initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
-                    self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), self.co_epochs, -1, 1)
-                    self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
-                    self.gradient_samples_overtime = []
         assert isinstance(x, torch.cuda.FloatTensor)
         bucket_size = self.bucket_size
 
