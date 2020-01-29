@@ -15,6 +15,69 @@ class NUQEstimator(GradientEstimator):
         self.ngpu = self.opt.nuq_ngpu
         self.acc_grad = None
 
+    def snap_online(self, model):
+        total_variance = 0
+        iterations = self.opt.nuq_number_of_samples 
+        mean = []
+        with torch.no_grad():
+            for p in model.parameters():
+                mean += [torch.zeros_like(p)]
+
+        for i in range(iterations):
+            acc_grad = None
+            if acc_grad is None:
+                acc_grad = []
+                with torch.no_grad():
+                    for p in model.parameters():
+                        acc_grad += [torch.zeros_like(p)]
+            else:
+                for a in acc_grad:
+                    a.zero_()
+
+            model.zero_grad()
+            data = next(self.data_iter)
+            loss = model.criterion(model, data)
+            grad = torch.autograd.grad(loss, model.parameters())
+            layers = len(list(model.parameters()))
+
+            with torch.no_grad():
+                for g, a in zip(grad, mean):
+                    if len(a.shape) != 1:
+                        a += g
+        
+        nw = sum([w.numel() for w in model.parameters()])
+        for i, a in enumerate(mean):
+            mean[i] /= iterations
+        
+        for i in range(iterations):
+            variance = 0.0
+            acc_grad = None
+            if acc_grad is None:
+                acc_grad = []
+                with torch.no_grad():
+                    for p in model.parameters():
+                        acc_grad += [torch.zeros_like(p)]
+            else:
+                for a in acc_grad:
+                    a.zero_()
+
+            model.zero_grad()
+            data = next(self.data_iter)
+            loss = model.criterion(model, data)
+            grad = torch.autograd.grad(loss, model.parameters())
+            layers = len(list(model.parameters()))
+
+            with torch.no_grad():
+                for ee, gg in zip(mean, grad):
+                    if len(ee.shape) != 1:
+                        variance += (gg-ee).pow(2).sum()
+                total_variance += variance / nw
+        total_variance /= iterations
+        total_mean = sum([item.sum() for item in mean])
+        
+        return total_mean, total_variance
+        
+
     def grad(self, model_new, in_place=False):
         model = model_new
 
@@ -36,7 +99,7 @@ class NUQEstimator(GradientEstimator):
 
             with torch.no_grad():
                 for g, a in zip(grad, self.acc_grad):
-                    a += self.qdq.quantize(g, in_place, layers) / self.ngpu
+                    a += self.qdq.quantize(g, layers) / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
@@ -80,11 +143,12 @@ class NUQEstimatorSingleGPUParallel(GradientEstimator):
 
         loss = loss[-1]
 
+        layers = len(list(model.parameters()))
         # quantize all grads
         for i in range(self.ngpu):
             with torch.no_grad():
                 for p in models[i].parameters():
-                    p.grad.copy_(self.qdq.quantize(p.grad, in_place)/self.ngpu)
+                    p.grad.copy_(self.qdq.quantize(p.grad, layers)/self.ngpu)
 
         # aggregate grads into gpu0
         for i in range(1, self.ngpu):
@@ -143,13 +207,14 @@ class NUQEstimatorMultiGPUParallel(GradientEstimator):
 
         loss = loss[-1]
 
+        layers = len(list(model.parameters()))
         # quantize all grads
         for i in range(self.ngpu):
             with torch.no_grad():
                 with torch.cuda.device(i):
                     torch.cuda.synchronize()
                     for p in models[i].parameters():
-                        p.grad.copy_(self.qdq[i].quantize(p.grad, in_place)/self.ngpu)
+                        p.grad.copy_(self.qdq[i].quantize(p.grad, layers) / self.ngpu)
 
         # aggregate grads into gpu0
         for i in range(1, self.ngpu):
