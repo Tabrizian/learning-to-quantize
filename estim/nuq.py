@@ -42,7 +42,7 @@ class NUQEstimator(GradientEstimator):
 
             with torch.no_grad():
                 for g, a in zip(grad, mean):
-                    # if len(a.shape) != 1:
+                    #if len(a.shape) != 1:
                     a += g
         
         nw = sum([w.numel() for w in model.parameters()])
@@ -71,9 +71,9 @@ class NUQEstimator(GradientEstimator):
                 for ee, gg in zip(mean, grad):
                     # if len(ee.shape) != 1:
                     variance += (gg-ee).pow(2).sum()
-                total_variance += variance / nw
-        total_variance /= iterations
-        total_mean = sum([item.sum() for item in mean])
+                total_variance += variance
+        total_variance /= (iterations * nw)
+        total_mean = sum([item.sum() for item in mean]) / (nw * iterations)
         
         return total_mean, total_variance
         
