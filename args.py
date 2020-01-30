@@ -113,6 +113,8 @@ def add_args():
     parser.add_argument('--nuq_parallel', default='no', help='no|gpu1|ngpu')
     parser.add_argument('--nuq_number_of_samples',
                         default=argparse.SUPPRESS, type=int, help='NUQ Number of Samples')
+    parser.add_argument('--nuq_truncated_interval',
+                        default=argparse.SUPPRESS, type=float, help='NUQ Truncated Interval')
     parser.add_argument('--nuq_cd_epochs', default=argparse.SUPPRESS, help='NUQ Adaptive CO Epochs', type=int)
     args = parser.parse_args()
     return args
@@ -122,7 +124,8 @@ def opt_to_nuq_kwargs(opt):
     return {'ngpu': opt.nuq_ngpu, 'bits': opt.nuq_bits,
             'bucket_size': opt.nuq_bucket_size, 'method': opt.nuq_method,
             'multiplier': opt.nuq_mul, 'cd_epochs': opt.nuq_cd_epochs,
-            'number_of_samples': opt.nuq_number_of_samples}
+            'number_of_samples': opt.nuq_number_of_samples,
+            'interval': opt.nuq_truncated_interval}
 
 
 def yaml_opt(yaml_path):
