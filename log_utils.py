@@ -16,6 +16,10 @@ class TBXWrapper(object):
     def log_value(self, name, val, step):
         self.writer.add_scalar(name, val, step)
         self.logobj[name] += [(time.time(), step, float(val))]
+    
+    def log_histogram(self, name, val, step):
+        self.writer.add_histogram(name, val, step)
+
 
     def add_scalar(self, name, val, step):
         self.log_value(name, val, step)

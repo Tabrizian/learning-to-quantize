@@ -13,13 +13,13 @@ def get_uniform_levels(bits):
     levels_uni = np.linspace(-1, 1, num=num_levels)
     return levels_uni
 
-def get_quantile_levels(bits, mean, sigma):
+def get_quantile_levels(bits, mean, sigma, min, max):
     """quantile levels """
     num_levels = 2 << bits - 1
     cdf_points = np.linspace(0, 1, num=num_levels - 2)
-    levels = [truncnorm.ppf(level, -1, 1, loc=mean, scale=sigma) for level in cdf_points]
-    levels[0] = -1
-    levels[-1] = 1
+    levels = [truncnorm.ppf(level, min, max, loc=mean, scale=sigma) for level in cdf_points]
+    levels[0] = min
+    levels[-1] = max
     return levels
 
 def get_level(x, levels):
@@ -27,15 +27,15 @@ def get_level(x, levels):
         if x >= levels[index] and x < levels[index + 1]:
             return index
 
-def normal_function(x, mean, sigma):
-    f = truncnorm.pdf(x, -1, 1, loc=mean, scale=sigma)
+def normal_function(x, mean, sigma, min, max):
+    f = truncnorm.pdf(x, min, max, loc=mean, scale=sigma)
     return f
 
-def calculate_estimated_error(mean, sigma, levels):
+def calculate_estimated_error(mean, sigma, levels, min, max):
     sum = []
     for index, level in enumerate(levels[:-1]):
         def inline_func(x):
-            normal_func = normal_function(x, mean, sigma)
+            normal_func = normal_function(x, mean, sigma, min, max)
             index_level = get_level(x, levels)
             variance = (x - levels[index_level]) * (levels[index_level + 1] - x)
             return variance * normal_func
@@ -60,7 +60,7 @@ def get_adaptive_levels_co(initial_levels, number_of_levels, mean, sigma, epochs
                 truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) + a * b + sigma ** 2 * c, minimum, maximum, loc=mean, scale=sigma
                 )
 
-        losses.append(calculate_estimated_error(mean, sigma, initial_levels))
+        losses.append(calculate_estimated_error(mean, sigma, initial_levels, minimum, maximum))
         print('Epoch', epoch, 'error', losses[-1])
         # initial_levels = new_levels
         all_levels.append(initial_levels)
@@ -183,10 +183,10 @@ class QuantizeNumPy(object):
             self.levels = get_uniform_levels(bits)
             self.qdq = qdqLinf
         elif method == 'nuq2':
-            self.levels = get_quantile_levels(bits, 0, 0.1)
+            self.levels = get_quantile_levels(bits, 0, 0.1, min, max)
             self.qdq = qdqL2
         elif method == 'nuq2inf':
-            self.levels = get_quantile_levels(bits, 0, 0.1)
+            self.levels = get_quantile_levels(bits, 0, 0.1, min, max)
             self.qdq = qdqLinf
         self.number_of_iterations = 0
         self.gradient_samples = []
@@ -210,7 +210,6 @@ class QuantizeNumPy(object):
                     initial_levels = get_quantile_levels(self.bits, mean.cpu(), variance.cpu())
                     self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean.cpu(), variance.cpu(), 10, -1, 1)
                     self.gradient_samples_overtime = []
-        import ipdb; ipdb.set_trace()
         return self.qdq(x, self.levels, self.bucket_size, in_place)
 
     def calculate_mean_variance(self, x):
@@ -280,6 +279,7 @@ class QuantizeMultiBucket(object):
         QSGD-inf: qdqLinf + levels_uni
         """
         self.method = method
+        self.interval = kwargs['interval']
         if method == 'q':
             self.levels = get_uniform_levels(bits)
             self.norm_type = 'fro'
@@ -290,10 +290,10 @@ class QuantizeMultiBucket(object):
             self.levels = get_uniform_levels(bits)
             self.norm_type = float('inf')
         elif method == 'nuq2':
-            self.levels = get_quantile_levels(bits, 0, 0.1)
+            self.levels = get_quantile_levels(bits, 0, 0.1, -self.interval, self.interval)
             self.norm_type = 'fro'
         elif method == 'nuq2inf':
-            self.levels = get_quantile_levels(bits, 0, 0.1)
+            self.levels = get_quantile_levels(bits, 0, 0.1, -self.interval, self.interval)
             self.norm_type = float('inf')
         elif method == 'none':
             return
@@ -310,38 +310,29 @@ class QuantizeMultiBucket(object):
         self.qdq = QDQ(self.levels)
         self.mean = 0
         self.variance = 0.1
+        self.error = None
 
     def set_mean_variance(self, mean, variance):
         self.mean = mean
         self.variance = variance
+        print('Current mean is', mean, 'current variance is', variance)
+        self.error = calculate_estimated_error(self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.levels.cpu(), -self.interval, self.interval)
+        print('Error for CO is ', self.error)
 
     def update_levels(self):
-        initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()))
-        self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, -1, 1)
+        initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()), -self.interval, self.interval)
+        # initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), self.var)
+        self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, -self.interval, self.interval)
+        import ipdb; ipdb.set_trace()
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
-
-
-    def calculate_mean_variance(self, x):
-        sum = torch.zeros_like(x[0])
-        for epoch in x:
-            sum += epoch
-        mean = sum / len(x)
-
-        variance = torch.zeros_like(x[0])
-        for epoch in x:
-            variance += (epoch - sum) ** 2
-        variance = variance / len(x)
-        number_of_weights = len(variance)
-
-        variance = torch.sum(variance) / number_of_weights
-        mean = torch.sum(mean) / number_of_weights
-        return mean, variance
 
     def quantize(self, x, number_of_layers):
         if self.method == 'none':
             return x
         assert isinstance(x, torch.cuda.FloatTensor)
         bucket_size = self.bucket_size
+        self.qdq = QDQ(self.levels)
+
 
         num_tail = math.ceil(x.numel()/bucket_size)*bucket_size-x.numel()
         xv = torch.cat((x.view(-1),
