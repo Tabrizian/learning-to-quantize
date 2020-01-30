@@ -50,36 +50,15 @@ class MinVarianceGradient(object):
         gviter = self.opt.gvar_estim_iter
         Ege, var_e, snr_e, nv_e = self.gest.get_Ege_var(model, gviter)
         Esgd, var_s, snr_s, nv_s = self.sgd.get_Ege_var(model, gviter)
+        if self.opt.g_estim == 'sgd':
+            parameters = torch.cat([layer.view(-1) for layer in self.sgd.grad(model)])
+            tb_logger.log_histogram('sgd_dist', parameters, step=niters)
         variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated = self.gest.get_gradient_distribution(model, gviter)
         bias = torch.mean(torch.cat(
             [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
-        for i, mean in enumerate(means):
-            writer.add_scalar('single_weight/mean' + '/' + str(i), mean.item(), niters)
-
-        for i, variance in enumerate(variances):
-            print(torch.log(variance).item())
-            writer.add_scalar('single_weight/variance' + '/' + str(i), torch.log(variance).item(), niters)
+        if self.opt.g_estim == 'nuq':
+            tb_logger.log_value('co_error', float(self.gest.qdq.error), step=niters)
         
-        print('Total Mean:', total_mean.item())
-        print('Total mean scalar:', total_mean)
-        writer.add_scalar('total/mean', total_mean.item(), niters)
-
-        print('Total Variance:', total_variance.item())
-        print('Total variance scalar:', total_variance)
-        writer.add_scalar('total/variance', total_variance.item(), niters)
-
-        print('Normalized Mean:', total_mean_normalized.item())
-        print('Total mean normalized scalar:', total_mean_normalized)
-        writer.add_scalar('normalized/mean', total_mean_normalized.item(), niters)
-
-
-        print('Normalized Variance:', total_variance_normalized.item())
-        print('Total variance normalized scalar:', total_variance_normalized)
-        writer.add_scalar('normalized/variance', total_variance_normalized.item(), niters)
-
-        writer.add_scalar('unconcatenated/variance', total_variance_unconcatenated.item(), niters)
-        writer.add_scalar('unconcatenated/mean', total_mean_unconcatenated.item(), niters)
-
         tb_logger.log_value('grad_bias', float(bias), step=niters)
         tb_logger.log_value('est_var', float(var_e), step=niters)
         tb_logger.log_value('sgd_var', float(var_s), step=niters)
@@ -87,6 +66,7 @@ class MinVarianceGradient(object):
         tb_logger.log_value('sgd_snr', float(snr_s), step=niters)
         tb_logger.log_value('est_nvar', float(nv_e), step=niters)
         tb_logger.log_value('sgd_nvar', float(nv_s), step=niters)
+        tb_logger.log_value
         sgd_x, est_x = ('', '[X]') if self.gest_used else ('[X]', '')
         return ('G Bias: %.8f\t'
                 '%sSGD Var: %.8f\t %sEst Var: %.8f\t'
