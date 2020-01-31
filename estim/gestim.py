@@ -45,7 +45,13 @@ class GradientEstimator(object):
         self.data_iter = self.estim_iter
         ret = self.grad(model)
         self.data_iter = dt
-        return ret
+        _, normalized_grad = self.flatten_and_normalize(ret, self.opt.nuq_bucket_size)
+        final_normalized_grad = []
+        for item1, item2 in zip(normalized_grad, ret):
+            final_normalized_grad.append(item1.view(item2.shape))
+
+
+        return final_normalized_grad
 
     def get_Ege_var(self, model, gviter):
         # estimate grad mean and variance
@@ -136,7 +142,7 @@ class GradientEstimator(object):
         gviter: Number of minibatches to apply on the model
         model: Model to be evaluated
         """
-        bucket_size = 1024
+        bucket_size = self.opt.nuq_bucket_size
         mean_estimates_normalized, mean_estimates_unconcatenated = self.flatten_and_normalize(model.parameters(), bucket_size)
         # estimate grad mean and variance
         mean_estimates = [torch.zeros_like(g) for g in model.parameters()]
