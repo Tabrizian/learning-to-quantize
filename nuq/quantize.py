@@ -323,7 +323,6 @@ class QuantizeMultiBucket(object):
         initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()), -self.interval, self.interval)
         # initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), self.var)
         self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, -self.interval, self.interval)
-        import ipdb; ipdb.set_trace()
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
 
     def quantize(self, x, number_of_layers):
