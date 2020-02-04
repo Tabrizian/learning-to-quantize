@@ -15,6 +15,7 @@ class NUQEstimator(GradientEstimator):
         self.ngpu = self.opt.nuq_ngpu
         self.acc_grad = None
 
+        
     def snap_online(self, model):
         total_variance = 0
         iterations = self.opt.nuq_number_of_samples 

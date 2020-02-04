@@ -57,7 +57,14 @@ class MinVarianceGradient(object):
         bias = torch.mean(torch.cat(
             [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
         if self.opt.g_estim == 'nuq':
-            tb_logger.log_value('co_error', float(self.gest.qdq.error), step=niters)
+            if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq4':
+                if self.opt.nuq_method == 'nuq3':
+                    tb_logger.log_value('co_error', float(self.gest.qdq.error), step=niters)
+                tb_logger.log_value('multiplier', float(self.gest.qdq.multiplier), step=niters)
+                tb_logger.log_value('bits', float(self.gest.qdq.bits), step=niters)
+                
+
+        
         
         tb_logger.log_value('grad_bias', float(bias), step=niters)
         tb_logger.log_value('est_var', float(var_e), step=niters)
@@ -66,6 +73,10 @@ class MinVarianceGradient(object):
         tb_logger.log_value('sgd_snr', float(snr_s), step=niters)
         tb_logger.log_value('est_nvar', float(nv_e), step=niters)
         tb_logger.log_value('sgd_nvar', float(nv_s), step=niters)
+        tb_logger.log_value('tot_var_norm', float(total_variance_normalized), step=niters)
+        tb_logger.log_value('tot_var', float(total_variance), step=niters)
+        tb_logger.log_value('tot_mean_norm', float(total_mean_normalized), step=niters)
+        tb_logger.log_value('tot_mean', float(total_mean), step=niters)
         tb_logger.log_value
         sgd_x, est_x = ('', '[X]') if self.gest_used else ('[X]', '')
         return ('G Bias: %.8f\t'

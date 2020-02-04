@@ -95,6 +95,8 @@ def add_args():
                         default=argparse.SUPPRESS, type=int)
     parser.add_argument('--g_osnap_iter',
                         default=argparse.SUPPRESS, type=int)
+    parser.add_argument('--g_bsnap_iter',
+                        default=argparse.SUPPRESS, type=int)
     parser.add_argument('--g_epoch',
                         default=argparse.SUPPRESS, action='store_true')
     parser.add_argument('--niters',

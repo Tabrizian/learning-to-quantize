@@ -50,11 +50,17 @@ class OptimizerFactory(object):
         if ((self.niters - opt.gvar_start) % opt.g_osnap_iter == 0
                 and self.niters >= opt.gvar_start):
             print(self.niters)
-            if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq': 
+            if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq' or opt.nuq_method =='nuq3'or opt.nuq_method =='nuq4': 
                 mean, variance = gvar.gest.snap_online(model)
                 gvar.gest.qdq.set_mean_variance(mean, variance)
-                if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf':
+                if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq3' or opt.nuq_method =='nuq4':
                    gvar.gest.qdq.update_levels()
+        if ((self.niters - opt.gvar_start) % opt.g_bsnap_iter == 0
+                and self.niters > opt.gvar_start):
+            print(self.niters)
+            if opt.nuq_method == 'nuq4': 
+                   gvar.gest.qdq.bits += 1
+
         pg_used = gvar.gest_used
         loss = gvar.grad(self.niters)
         if gvar.gest_used != pg_used:
