@@ -353,3 +353,4 @@ TSWLatexianTemp*
 *.sta
 nuq/cuda/objs
 experiments/
+.vscode
