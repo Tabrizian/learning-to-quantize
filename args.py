@@ -109,6 +109,7 @@ def add_args():
     parser.add_argument('--nuq_bucket_size', default=1024, type=int)
     parser.add_argument('--nuq_ngpu', default=1, type=int)
     parser.add_argument('--nuq_mul', default=0.5, type=float)
+    parser.add_argument('--nuq_learning_rate', default=argparse.SUPPRESS, type=float)
     parser.add_argument('--untrain_steps', default=0, type=int)
     parser.add_argument('--untrain_lr', default=0.001, type=float)
     parser.add_argument('--untrain_std', default=0.001, type=float)
@@ -127,7 +128,7 @@ def opt_to_nuq_kwargs(opt):
             'bucket_size': opt.nuq_bucket_size, 'method': opt.nuq_method,
             'multiplier': opt.nuq_mul, 'cd_epochs': opt.nuq_cd_epochs,
             'number_of_samples': opt.nuq_number_of_samples,
-            'interval': opt.nuq_truncated_interval}
+            'interval': opt.nuq_truncated_interval, 'learning_rate': opt.nuq_learning_rate}
 
 
 def yaml_opt(yaml_path):
