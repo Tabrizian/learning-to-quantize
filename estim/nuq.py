@@ -1,6 +1,7 @@
 import torch
 import torch.nn
 import torch.multiprocessing
+import numpy as np
 
 from args import opt_to_nuq_kwargs
 from .gestim import GradientEstimator
@@ -14,6 +15,30 @@ class NUQEstimator(GradientEstimator):
         self.qdq = QuantizeMultiBucket(**opt_to_nuq_kwargs(self.opt))
         self.ngpu = self.opt.nuq_ngpu
         self.acc_grad = None
+
+    def flatten_and_normalize(self, gradient, bucket_size=1024):
+        flattened_parameters, less_flattened = self.flatten(gradient)
+        num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
+        normalized_buckets = []
+        for bucket_i in range(num_bucket):
+            start = bucket_i * bucket_size
+            end = min((bucket_i + 1) * bucket_size, len(flattened_parameters))
+            x_bucket = flattened_parameters[start:end].clone()
+            norm = x_bucket.norm()
+            normalized_buckets.append(torch.div(x_bucket, norm + torch.tensor(1e-7)))
+
+        unconcatenated_buckets = []
+        for layer in less_flattened:
+            num_bucket = int(np.ceil(len(layer) / bucket_size))
+            normalized_unconcatenated_buckets = []
+            for bucket_i in range(num_bucket):
+                start = bucket_i * bucket_size
+                end = min((bucket_i + 1) * bucket_size, len(layer))
+                x_bucket = layer[start:end].clone()
+                norm = x_bucket.norm()
+                normalized_unconcatenated_buckets.append(torch.div(x_bucket, norm + torch.tensor(1e-7)))
+            unconcatenated_buckets.append(torch.cat(normalized_unconcatenated_buckets))
+        return torch.cat(normalized_buckets), unconcatenated_buckets
 
         
     def snap_online(self, model):
@@ -39,6 +64,12 @@ class NUQEstimator(GradientEstimator):
             data = next(self.data_iter)
             loss = model.criterion(model, data)
             grad = torch.autograd.grad(loss, model.parameters())
+            _, normalized_grad = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            final_normalized_grad = []
+            for item1, item2 in zip(normalized_grad, grad):
+                final_normalized_grad.append(item1.view(item2.shape))
+            
+            grad = final_normalized_grad
             layers = len(list(model.parameters()))
 
             with torch.no_grad():
@@ -66,6 +97,11 @@ class NUQEstimator(GradientEstimator):
             data = next(self.data_iter)
             loss = model.criterion(model, data)
             grad = torch.autograd.grad(loss, model.parameters())
+            _, normalized_grad = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            final_normalized_grad = []
+            for item1, item2 in zip(normalized_grad, grad):
+                final_normalized_grad.append(item1.view(item2.shape))
+            grad = final_normalized_grad
             layers = len(list(model.parameters()))
 
             with torch.no_grad():
