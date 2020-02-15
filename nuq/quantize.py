@@ -34,8 +34,8 @@ def get_quantile_levels(bits, mean, sigma, min, max):
     num_levels = 2 << bits - 1
     cdf_points = np.linspace(0, 1, num=num_levels - 2)
     levels = [truncnorm.ppf(level, min, max, loc=mean, scale=sigma) for level in cdf_points]
-    levels[0] = min
-    levels[-1] = max
+    
+    levels = [min] + levels + [max]
     return levels
 
 def get_level(x, levels):
@@ -78,6 +78,10 @@ def get_adaptive_levels_co(initial_levels, number_of_levels, mean, sigma, epochs
     new_levels[0] = initial_levels[0]
     new_levels[-1] = initial_levels[-1]
     all_levels = [initial_levels]
+    mean = mean.item()
+    sigma = sigma.item()
+    minimum = minimum.item()
+    maximum = maximum.item()
     for epoch in range(epochs):
         indexes = list(range(len(initial_levels)))[1:-1]
         for index in indexes:
@@ -307,8 +311,9 @@ class QuantizeMultiBucket(object):
         """
         self.method = method
         self.multiplier = multiplier
-        self.interval = kwargs['interval']
-        a, b = (-self.interval - 0) / 0.1, (self.interval - 0) / 0.1
+        if kwargs['interval'] != None:
+            self.interval = kwargs['interval']
+            a, b = (-self.interval - 0) / 0.1, (self.interval - 0) / 0.1
         if method == 'q':
             self.levels = get_uniform_levels(bits)
             self.norm_type = 'fro'
@@ -348,7 +353,7 @@ class QuantizeMultiBucket(object):
         self.error = None
     
 
-    def exponential_gd(self, initial_point, learning_rate=0.8, epochs=10000):
+    def exponential_gd(self, initial_point, learning_rate=0.7, epochs=10000):
         mean = self.mean.cpu().item()
         variance = torch.sqrt(self.variance).cpu().item()
         p = initial_point
@@ -367,11 +372,10 @@ class QuantizeMultiBucket(object):
                 return j * p ** (j - 1) + (j + 1) * p ** j
             arg2 = torch.sum(torch.tensor([arg2_1(j) * (trunc_pdf(p ** (j + 1)) - trunc_pdf(p ** (j))) for j in range(0, s)]))
             gradient = 2 * s * (p ** (2 * s - 1)) * (trunc_cdf(p ** s) - trunc_cdf(0)) + arg1 + variance ** 2 * arg2
-            if torch.abs(gradient) < 5*10e-7 or i == 20000:
+            if i == 10:
                 break
             p = p - learning_rate * gradient
-            if i % 1000 == 0:
-                print('Multiplier value is', p, 'Epoch is ', i, 'gradient', gradient)
+            print('Multiplier value is', p, 'Epoch is ', i, 'gradient', gradient)
             i += 1
         return p
 
@@ -379,16 +383,19 @@ class QuantizeMultiBucket(object):
         self.mean = mean
         self.variance = variance
         print('Current mean is', mean, 'current variance is', variance)
-        a, b = (-self.interval - mean.cpu().item()) / variance.cpu().item(), (self.interval - mean.cpu().item()) / variance.cpu().item()
-        self.error = calculate_estimated_error(self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.levels.cpu(), a, b)
+        sigma = torch.sqrt(variance.cpu())
+        a, b = (-self.interval - mean.cpu().item()) / sigma, (self.interval - mean.cpu().item()) / sigma
+        self.error = calculate_estimated_error(self.mean.cpu(), sigma, self.levels.cpu(), a, b)
         print('Error for CO is ', self.error)
 
     def update_levels(self):
         if self.method == 'nuq2':
-            a, b = (-self.interval - self.mean.cpu().item()) / self.variance.cpu().item(), (self.interval - self.mean.cpu().item()) / self.variance.cpu().item()
+            sigma = torch.sqrt(self.variance).cpu()
+            a, b = (-self.interval - self.mean.cpu().item()) / sigma, (self.interval - self.mean.cpu().item()) / sigma
             self.levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()), -self.interval, self.interval)
-            # initial_levels = get_quantile_levels(self.bits, self.mean.cpu(), self.var)
+            initial_levels = self.levels
             self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, a, b)
+            print('Levels are', self.levels)
         elif self.method == 'nuq3':
             mean = self.mean.cpu()
             self.previous_best = None
@@ -408,11 +415,15 @@ class QuantizeMultiBucket(object):
                 optimal_points.append(optimal_p)
             half_point = 2 ** (self.bits - 1)
             optimal_points_costs = [calculate_new_error(get_exp_levels(self.bits, p)[half_point:], mean, sigma, a, b) for p in optimal_points]
+            print('Costs are', optimal_points_costs)
+            print('Points are', optimal_points)
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
+            print('Chosen multiplier is', self.multiplier)
             self.previous_best = self.multiplier
             self.levels = get_exp_levels(self.bits, self.multiplier)
             print('Levels are', self.levels)
+
         elif self.method == 'nuq4':
             mean = self.mean.cpu()
             self.previous_best = None
@@ -440,6 +451,7 @@ class QuantizeMultiBucket(object):
             print('Levels are', self.levels)
 
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
+        self.qdq = QDQ(self.levels)
     
 
     def quantize(self, x, number_of_layers):
@@ -447,7 +459,6 @@ class QuantizeMultiBucket(object):
             return x
         assert isinstance(x, torch.cuda.FloatTensor)
         bucket_size = self.bucket_size
-        self.qdq = QDQ(self.levels)
 
 
         num_tail = math.ceil(x.numel()/bucket_size)*bucket_size-x.numel()
