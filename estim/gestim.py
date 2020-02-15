@@ -53,7 +53,7 @@ class GradientEstimator(object):
 
         return final_normalized_grad
 
-   def get_Ege_var(self, model, gviter):
+    def get_Ege_var(self, model, gviter):
         # estimate grad mean and variance
         Ege = [torch.zeros_like(g) for g in model.parameters()]
         for i in range(gviter):
