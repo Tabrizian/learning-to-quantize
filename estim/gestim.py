@@ -53,7 +53,7 @@ class GradientEstimator(object):
 
         return final_normalized_grad
 
-    def get_Ege_var(self, model, gviter):
+   def get_Ege_var(self, model, gviter):
         # estimate grad mean and variance
         Ege = [torch.zeros_like(g) for g in model.parameters()]
         for i in range(gviter):
@@ -64,16 +64,13 @@ class GradientEstimator(object):
         for e in Ege:
             e /= gviter
 
-        n = 0
-        for e in Ege:
-            n += e.numel()
+
         nw = sum([w.numel() for w in model.parameters()])
         var_e = 0
         Es = [torch.zeros_like(g) for g in model.parameters()]
         En = [torch.zeros_like(g) for g in model.parameters()]
         for i in range(gviter):
             ge = self.grad_estim(model)
-            # TODO: is variance important?
             v = sum([(gg-ee).pow(2).sum() for ee, gg in zip(Ege, ge)])
             for s, e, g, n in zip(Es, Ege, ge, En):
                 s += g.pow(2)
