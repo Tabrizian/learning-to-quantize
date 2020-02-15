@@ -57,15 +57,26 @@ class MinVarianceGradient(object):
         bias = torch.mean(torch.cat(
             [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
         if self.opt.g_estim == 'nuq':
-            if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq4':
+            if self.opt.nuq_method != 'none':
+                tb_logger.log_value('bits', float(self.gest.qdq.bits), step=niters)
+                tb_logger.log_value('levels', float(len(self.gest.qdq.levels)), step=niters)
+                tb_logger.log_value('includes_zero', float(1 if 0 in self.gest.qdq.levels else 0), step=niters)
+                number_of_positive_levels = 0
+                number_of_negative_levels = 0
+                for level in self.gest.qdq.levels:
+                    if level > 0:
+                        number_of_positive_levels += 1
+                    elif level < 0:
+                        number_of_negative_levels += 1
+                tb_logger.log_value('positive_levels', float(number_of_positive_levels), step=niters)
+                tb_logger.log_value('negative_levels', float(number_of_negative_levels), step=niters)
+
+            if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq4' or self.opt.nuq_method == 'nu1':
                 if self.opt.nuq_method == 'nuq3':
                     tb_logger.log_value('co_error', float(self.gest.qdq.error), step=niters)
                 tb_logger.log_value('multiplier', float(self.gest.qdq.multiplier), step=niters)
-                tb_logger.log_value('bits', float(self.gest.qdq.bits), step=niters)
-                
-
         
-        
+        print('est_var is', var_e)
         tb_logger.log_value('grad_bias', float(bias), step=niters)
         tb_logger.log_value('est_var', float(var_e), step=niters)
         tb_logger.log_value('sgd_var', float(var_s), step=niters)
