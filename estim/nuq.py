@@ -134,9 +134,18 @@ class NUQEstimator(GradientEstimator):
             grad = torch.autograd.grad(loss, model.parameters())
             layers = len(list(model.parameters()))
 
+            per_layer = False
             with torch.no_grad():
-                for g, a in zip(grad, self.acc_grad):
-                    a += self.qdq.quantize(g, layers) / self.ngpu
+                if per_layer:
+                    flattened_array, _ = self.flatten(grad)
+                    gradient_quantized = self.qdq.quantize(flattened_array, layers) / self.ngpu
+                    unflattened_array = self.unflatten(gradient_quantized, grad)
+                    for g, a in zip(unflattened_array, self.acc_grad):
+                        a += g
+                else:
+                    for g, a in zip(grad, self.acc_grad):
+                        a  += self.qdq.quantize(g, layers) / self.ngpu
+
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):

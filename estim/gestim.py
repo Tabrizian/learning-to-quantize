@@ -45,13 +45,7 @@ class GradientEstimator(object):
         self.data_iter = self.estim_iter
         ret = self.grad(model)
         self.data_iter = dt
-        _, normalized_grad = self.flatten_and_normalize(ret, self.opt.nuq_bucket_size)
-        final_normalized_grad = []
-        for item1, item2 in zip(normalized_grad, ret):
-            final_normalized_grad.append(item1.view(item2.shape))
-
-
-        return final_normalized_grad
+        return ret
 
     def get_Ege_var(self, model, gviter):
         # estimate grad mean and variance
@@ -90,6 +84,16 @@ class GradientEstimator(object):
         for layer_parameters in gradient:
             flattened_parameters.append(torch.flatten(layer_parameters))
         return torch.cat(flattened_parameters), flattened_parameters
+    
+    def unflatten(self, gradient, parameters):
+        shaped_gradient = []
+        begin = 0
+        for layer in parameters:
+            size = layer.view(-1).shape[0]
+            shaped_gradient.append(gradient[begin:begin+size].view(layer.shape))
+            begin += size
+        return shaped_gradient
+        
     
     def flatten_and_normalize(self, gradient, bucket_size=1024):
         flattened_parameters, less_flattened = self.flatten(gradient)

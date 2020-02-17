@@ -53,7 +53,7 @@ class MinVarianceGradient(object):
         if self.opt.g_estim == 'sgd':
             parameters = torch.cat([layer.view(-1) for layer in self.sgd.grad(model)])
             tb_logger.log_histogram('sgd_dist', parameters, step=niters)
-        variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated = self.gest.get_gradient_distribution(model, gviter)
+        variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated = self.sgd.get_gradient_distribution(model, gviter)
         bias = torch.mean(torch.cat(
             [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
         if self.opt.g_estim == 'nuq':
@@ -71,8 +71,8 @@ class MinVarianceGradient(object):
                 tb_logger.log_value('positive_levels', float(number_of_positive_levels), step=niters)
                 tb_logger.log_value('negative_levels', float(number_of_negative_levels), step=niters)
 
-            if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq4' or self.opt.nuq_method == 'nu1':
-                if self.opt.nuq_method == 'nuq3':
+            if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq4' or self.opt.nuq_method == 'nuq5':
+                if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq5':
                     tb_logger.log_value('co_error', float(self.gest.qdq.error), step=niters)
                 tb_logger.log_value('multiplier', float(self.gest.qdq.multiplier), step=niters)
         
@@ -88,6 +88,8 @@ class MinVarianceGradient(object):
         tb_logger.log_value('tot_var', float(total_variance), step=niters)
         tb_logger.log_value('tot_mean_norm', float(total_mean_normalized), step=niters)
         tb_logger.log_value('tot_mean', float(total_mean), step=niters)
+        tb_logger.log_value('tot_var_norm_layer', float(total_variance_unconcatenated), step=niters)
+        tb_logger.log_value('tot_mean_norm_layer', float(), step=niters)
         tb_logger.log_value
         sgd_x, est_x = ('', '[X]') if self.gest_used else ('[X]', '')
         return ('G Bias: %.8f\t'

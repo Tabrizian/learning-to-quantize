@@ -92,10 +92,62 @@ def get_adaptive_levels_co(initial_levels, number_of_levels, mean, sigma, epochs
                 truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) + a * b + sigma ** 2 * c, minimum, maximum, loc=mean, scale=sigma
                 )
 
-        losses.append(calculate_estimated_error(mean, sigma, initial_levels, minimum, maximum))
+        losses.append(calculate_estimated_error(initial_levels,mean, sigma,  minimum, maximum))
         print('Epoch', epoch, 'error', losses[-1])
         # initial_levels = new_levels
         all_levels.append(initial_levels)
+    return initial_levels, all_levels, losses
+
+def bisect_find_point(l_2, mean, sigma, a, b, begin, end):
+    x = (begin + end) / 2
+    def objective(x):
+        part_1 = (l_2 - mean) * (truncnorm.cdf(l_2, a, b, loc=mean, scale=sigma) - truncnorm.cdf(x, a, b, loc=mean, scale=sigma)) + 2 * x * (truncnorm.cdf(0, a, b, loc=mean, scale=sigma) - truncnorm.cdf(x, a, b, loc=mean, scale=sigma))
+        part_2 = sigma ** 2 * (truncnorm.pdf(l_2, a, b, loc=mean, scale=sigma) - truncnorm.pdf(x, a, b, loc=mean, scale=sigma))
+        return part_1 + part_2
+    
+
+    if (objective(begin) > 0 and objective(end)  > 0) or (objective(end) < 0 and objective(begin) < 0):
+        print('Whhhattt', 'How can I use bisection!!!!')
+
+    if (np.abs(objective(x) - 0) < 0.00001):
+        return x
+    if (objective(x) <0 and objective(end) > 0) or (objective(x) > 0 and objective(end) < 0):
+        return bisect_find_point(l_2, mean, sigma, a, b, x, end)
+    elif (objective(x) <0 and objective(begin) > 0) or (objective(x) > 0 and objective(begin) < 0):
+        return bisect_find_point(l_2, mean, sigma, a, b, begin, x)
+
+    
+
+def get_adaptive_levels_co_2(initial_levels, number_of_levels, mean, sigma, epochs, minimum, maximum):
+    losses = []
+    new_levels = np.zeros_like(initial_levels)
+    new_levels[0] = initial_levels[0]
+    new_levels[-1] = initial_levels[-1]
+    all_levels = [initial_levels]
+    mean = mean.item()
+    sigma = sigma.item()
+    minimum = minimum.item()
+    maximum = maximum.item()
+    for epoch in range(epochs):
+        indexes = list(range(len(initial_levels)))[1:-1]
+        initial_levels[0] = bisect_find_point(initial_levels[1], mean, sigma, minimum, maximum, 0, initial_levels[1])
+        for index in indexes:
+            if index == 1:
+                continue
+            a = (initial_levels[index - 1] - mean) / (initial_levels[index + 1] - initial_levels[index - 1])
+            b = truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) - truncnorm.cdf(initial_levels[index - 1], minimum, maximum, loc=mean, scale=sigma)
+            c = (truncnorm.pdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) - truncnorm.pdf(initial_levels[index - 1], minimum, maximum, loc=mean, scale=sigma)) / (initial_levels[index + 1] - initial_levels[index - 1])
+            initial_levels[index] = truncnorm.ppf(
+                truncnorm.cdf(initial_levels[index + 1], minimum, maximum, loc=mean, scale=sigma) + a * b + sigma ** 2 * c, minimum, maximum, loc=mean, scale=sigma
+                )
+
+        losses.append(calculate_new_error(initial_levels,mean, sigma,  minimum, maximum))
+        print('Epoch', epoch, 'error', losses[-1])
+        # initial_levels = new_levels
+        all_levels.append(initial_levels)
+    negative_levels = [-level for level in initial_levels]
+    negative_levels.reverse()
+    initial_levels = negative_levels + initial_levels
     return initial_levels, all_levels, losses
 
 
@@ -335,6 +387,9 @@ class QuantizeMultiBucket(object):
         elif method == 'nuq4':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
+        elif method == 'nuq5':
+            self.levels = get_exp_levels(bits, multiplier)
+            self.norm_type = 'fro'
         elif method == 'none':
             return
 
@@ -372,7 +427,7 @@ class QuantizeMultiBucket(object):
                 return j * p ** (j - 1) + (j + 1) * p ** j
             arg2 = torch.sum(torch.tensor([arg2_1(j) * (trunc_pdf(p ** (j + 1)) - trunc_pdf(p ** (j))) for j in range(0, s)]))
             gradient = 2 * s * (p ** (2 * s - 1)) * (trunc_cdf(p ** s) - trunc_cdf(0)) + arg1 + variance ** 2 * arg2
-            if i == 10:
+            if i == 200:
                 break
             p = p - learning_rate * gradient
             print('Multiplier value is', p, 'Epoch is ', i, 'gradient', gradient)
@@ -395,6 +450,14 @@ class QuantizeMultiBucket(object):
             self.levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()), -self.interval, self.interval)
             initial_levels = self.levels
             self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, a, b)
+            print('Levels are', self.levels)
+        if self.method == 'nuq5':
+            sigma = torch.sqrt(self.variance).cpu()
+            a, b = (-self.interval - self.mean.cpu().item()) / sigma, (self.interval - self.mean.cpu().item()) / sigma
+            self.levels = get_quantile_levels(self.bits, self.mean.cpu(), torch.sqrt(self.variance.cpu()), -self.interval, self.interval)
+            half_point = int(len(self.levels) / 2)
+            initial_levels = self.levels
+            self.levels, all_levels, losses = get_adaptive_levels_co_2(initial_levels[half_point:], len(self.levels) / 2, self.mean.cpu(), torch.sqrt(self.variance.cpu()), self.co_epochs, a, b)
             print('Levels are', self.levels)
         elif self.method == 'nuq3':
             mean = self.mean.cpu()
