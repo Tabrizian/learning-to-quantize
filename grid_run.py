@@ -6,15 +6,16 @@ import grid.nuq
 
 
 class RunSingle(object):
-    def __init__(self, log_dir, module_name, exclude, parallel=False):
+    def __init__(self, log_dir, module_name, exclude, prefix, parallel=False):
         self.log_dir = log_dir
         self.num = 0
         self.module_name = module_name
         self.exclude = exclude
         self.parallel = parallel
+        self.prefix = prefix
 
     def __call__(self, args):
-        logger_name = 'runs/%s/%02d_' % (self.log_dir, self.num)
+        logger_name = 'runs/%s/%s_%03d_' % (self.log_dir, self.prefix, self.num)
         cmd = ['python -m {}'.format(self.module_name)]
         self.num += 1
         for k, v in args:
@@ -78,19 +79,22 @@ if __name__ == '__main__':
     parser.add_argument('--cluster', default='bolt', type=str)
     parser.add_argument('--cluster_args', default='8,4,gpu', type=str)
     parser.add_argument('--run0_id', default=0, type=int)
+    parser.add_argument('--prefix', default='0', type=str)
     args = parser.parse_args()
+    prefix = args.prefix
     run0_id = args.run0_id
     val = grid.__dict__[args.grid].__dict__[args.run_name]([])
-    jobs, parallel = grid.cluster.__dict__[args.cluster](args.cluster_args)
+    jobs, parallel = grid.cluster.__dict__[args.cluster](args.cluster_args, args.prefix)
     args, log_dir, module_name, exclude = val
 
-    run_single = RunSingle(log_dir, module_name, exclude, parallel)
+    run_single = RunSingle(log_dir, module_name, exclude, prefix, parallel)
     run_single.num = run0_id
 
     cmds = run_multi(run_single, args)
     print(len(cmds))
-    for j, job in enumerate(jobs):
-        with open('jobs/{}.sh'.format(job), 'w') as f:
+    for j, job_index in enumerate(jobs):
+        file_name = 'jobs/{prefix}_{job}.sh'.format(prefix=prefix, job=str(int(job_index)))
+        with open(file_name, 'w') as f:
             for i in range(j, len(cmds), len(jobs)):
                 print(cmds[i], file=f)
             if parallel:
