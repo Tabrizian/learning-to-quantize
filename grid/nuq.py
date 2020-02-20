@@ -214,8 +214,8 @@ def cifar10_full(args):
                  ('g_optim_start', 0),
                  ('g_epoch', ''),
                  ]
-    # args_sgd = [('g_estim', ['sgd'])]
-    # args += [OrderedDict(shared_args+gvar_args+args_sgd)]
+    args_sgd = [('g_estim', ['sgd'])]
+    args += [OrderedDict(shared_args+gvar_args+args_sgd)]
 
     args_super_sgd = [
         ('g_estim', ['nuq']),
@@ -224,7 +224,6 @@ def cifar10_full(args):
         ('nuq_ngpu', 4),  # 2
         ('nuq_method', [
                         ('nuq3', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100), ('nuq_learning_rate', 0.7), ('nuq_layer',  1)])),
-                        #('nuq2', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100), ('nuq_cd_epochs', 30)])),
                         ('nuq5', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100), ('nuq_cd_epochs', 30), ('nuq_layer',  1)])),
                         ('qinf', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100), ('nuq_learning_rate', 0.7), ('nuq_layer', 1)])),
                         ('nuq', OrderedDict([('nuq_mul', 0.5),('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100),('nuq_layer',  1)])),
@@ -232,33 +231,6 @@ def cifar10_full(args):
                         ])
     ]
     args += [OrderedDict(shared_args+gvar_args+args_super_sgd)]
-    # args_sgd = [('g_estim', ['sgd'])]
-    # args += [OrderedDict(shared_args+gvar_args+args_sgd)]
-
-    # args_nuq = [
-    #     ('g_estim', ['nuq']),
-    #     ('nuq_bits', 2),
-    #     ('nuq_bucket_size', [1024, 2048, 4096, 8192]),
-    #     ('nuq_ngpu', [4, 8]),  # 2
-    #     ('nuq_method', [
-    #                     ('nuq4', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100)]))
-    #                     ])
-    # ]
-    # args += [OrderedDict(shared_args+gvar_args+args_nuq)]
-
-    # args_nuq = [
-    #     ('g_estim', ['nuq']),
-    #     ('nuq_bits', [2, 3, 4]),
-    #     ('nuq_bucket_size', [1024, 2048, 4096, 8192]),
-    #     ('nuq_ngpu', [4, 8]),  # 2
-    #     ('nuq_method', [
-    #                      ('nuq3', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100)])),
-    #                      ('nuq', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100)])),
-    #                      ('q', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100)])),
-    #                      ('qinf', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', 100)]))
-    #                     ])
-    # ]
-    # args += [OrderedDict(shared_args+gvar_args+args_nuq)]
 
     return args, log_dir, module_name, exclude
 
