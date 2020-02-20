@@ -19,7 +19,7 @@ def ssh(sargs):
     return jobs, parallel
 
 
-def slurm(sargs):
+def slurm(sargs, prefix):
     """
     rm jobs/*.sh jobs/log/* -f && python grid_run.py --grid G --run_name X \
     --cluster_args <njobs>,<ntasks>,<partitions>
@@ -37,10 +37,10 @@ def slurm(sargs):
 
 #SBATCH --job-name=array
 #SBATCH --output=jobs/log/array_%A_%a.log
-#SBATCH --array=0-{njobs}%{ntasks}
+#SBATCH --array=0-{njobs}
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1              # Number of GPUs (per node)
-#SBATCH -c 12
+#SBATCH -c 5
 #SBATCH --mem=16G
 #SBATCH -p {partition}
 #SBATCH --ntasks=1
@@ -51,10 +51,10 @@ python -c "import torch; print(torch.__version__)"
 
 # the environment variable SLURM_ARRAY_TASK_ID contains
 # the index corresponding to the current job step
-source $HOME/export_p1.sh
-bash jobs/$SLURM_ARRAY_TASK_ID.sh
-""".format(njobs=njobs-1, ntasks=ntasks, partition=partition)
-    with open('jobs/slurm.sbatch', 'w') as f:
+source $HOME/Code/nuqsgd/nuqsgd.sh
+bash jobs/{prefix}_$SLURM_ARRAY_TASK_ID.sh
+""".format(njobs=njobs-1, ntasks=ntasks, partition=partition, prefix=prefix)
+    with open('jobs/'+ prefix +'_slurm.sbatch', 'w') as f:
         print(sbatch_f, file=f)
     parallel = True  # each script runs in parallel
     return jobs, parallel
