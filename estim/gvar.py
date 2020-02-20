@@ -60,6 +60,8 @@ class MinVarianceGradient(object):
             if self.opt.nuq_method != 'none':
                 tb_logger.log_value('bits', float(self.gest.qdq.bits), step=niters)
                 tb_logger.log_value('levels', float(len(self.gest.qdq.levels)), step=niters)
+                for index, level in enumerate(self.gest.qdq.levels):
+                    tb_logger.log_value('levels/' + str(index), float(level), step=niters)
                 tb_logger.log_value('includes_zero', float(1 if 0 in self.gest.qdq.levels else 0), step=niters)
                 number_of_positive_levels = 0
                 number_of_negative_levels = 0

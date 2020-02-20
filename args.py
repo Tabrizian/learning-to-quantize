@@ -119,6 +119,7 @@ def add_args():
     parser.add_argument('--nuq_truncated_interval',
                         default=argparse.SUPPRESS, type=float, help='NUQ Truncated Interval')
     parser.add_argument('--nuq_cd_epochs', default=argparse.SUPPRESS, help='NUQ Adaptive CO Epochs', type=int)
+    parser.add_argument('--nuq_layer', default=1, help='NUQ Adaptive CO Epochs', type=int)
     args = parser.parse_args()
     return args
 
