@@ -136,7 +136,7 @@ class NUQEstimator(GradientEstimator):
 
             per_layer = False
             with torch.no_grad():
-                if per_layer:
+                if self.opt.nuq_layer == 1:
                     flattened_array, _ = self.flatten(grad)
                     gradient_quantized = self.qdq.quantize(flattened_array, layers) / self.ngpu
                     unflattened_array = self.unflatten(gradient_quantized, grad)
