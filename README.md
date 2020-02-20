@@ -1,8 +1,6 @@
-# NUQSGD: Improved Communication Efficiency for Data-parallel SGD via Nonuniform Quantization
+# Learning to Quantize
 
-Code for quantization methods from
-**[NUQSGD: Improved Communication Efficiency for Data-parallel SGD via Nonuniform Quantization](https://arxiv.org/abs/1908.06077)**
-*, A. Ramezani-Kebrya, F. Faghri, Roy D. M., arXiv preprint arXiv:1908.06077, 2019*
+Code for the ICML submission 6132.
 
 
 
@@ -31,27 +29,14 @@ The commands used to run the experiments can be found in `pjobs/` directory.
 These commands are generated using the `grid_run.py` script. Each experiment is 
 described using a function in the `grid/nuq.py` file.
 
-## Running using SLURM
+Each of the experiments can be run using `bash pjobs/supp_{i}.sh` where `i` is
+the experiment number being used. The small configuration changes in each
+experiment corresponds to variations in the quantization method used for
+generating the plots.
 
-```
-python3 -m grid.cluster slurm 
-```
+After running the experiments, the results will be stored in a directory
+specified in the configuration of the job that can be served using `tensorboard`
+to view the results. 
 
-## Reference
-
-If you found this code useful, please cite the following paper:
-
-    @misc{ramezanikebrya2019nuqsgd,
-      title={{NUQSGD}: Improved Communication Efficiency for Data-parallel SGD 
-      via Nonuniform Quantization},
-      author={Ramezani-Kebrya, Ali and Faghri, Fartash and Roy, Daniel M.},
-      url={https://github.com/fartashf/nuqsgd},
-      archivePrefix={arXiv},
-      eprint={1908.06077},
-      primaryClass={cs},
-      year={2019}
-    }
-
-## License
 
 [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0)
