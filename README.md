@@ -39,4 +39,9 @@ specified in the configuration of the job that can be served using `tensorboard`
 to view the results. 
 
 
+
+## Quantization
+Quantization methods are implemented in NumPy (`nuq/quantize.py`) as well is in 
+Cuda (`nuq/cuda/src/ops_gpu.cu`).
+
 [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0)
