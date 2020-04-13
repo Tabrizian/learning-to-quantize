@@ -91,44 +91,14 @@ def get_adaptive_levels_co(initial_levels, number_of_levels, mean, sigma, epochs
         all_levels.append(initial_levels)
     return initial_levels, all_levels, losses
 
-def bisect_find_point(l_2, mean, sigma, minimum, maximum, begin, end):
-    trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
+def bisection(begin, end, objective):
     x = (begin + end) / 2
-    def objective(x):
-        part_1 = (l_2 - mean) * (trunc_norm.cdf(l_2) - trunc_norm.cdf(x)) + 2 * x * (trunc_norm.cdf(0) - trunc_norm.cdf(x))
-        part_2 = sigma ** 2 * (trunc_norm.pdf(l_2) - trunc_norm.pdf(x))
-        return part_1 + part_2
-    
-
-    if (objective(begin) > 0 and objective(end)  > 0) or (objective(end) < 0 and objective(begin) < 0):
-        print('Whhhattt', 'How can I use bisection!!!!')
-
     if (np.abs(objective(x) - 0) < 0.00001):
         return x
     if (objective(x) <0 and objective(end) > 0) or (objective(x) > 0 and objective(end) < 0):
-        return bisect_find_point(l_2, mean, sigma, minimum, maximum, x, end)
+        return bisection(x, end, objective)
     elif (objective(x) <0 and objective(begin) > 0) or (objective(x) > 0 and objective(begin) < 0):
-        return bisect_find_point(l_2, mean, sigma, minimum, maximum, begin, x)
-
-    
-def bisect_find_point_2(level_1, level_2, norms, a, b, begin, end):
-    trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
-    x = (begin + end) / 2
-    def objective(x):
-        part_1 = (l_2 - mean) * (trunc_norm.cdf(l_2) - trunc_norm.cdf(x)) + 2 * x * (trunc_norm.cdf(0) - trunc_norm.cdf(x))
-        part_2 = sigma ** 2 * (trunc_norm.pdf(l_2) - trunc_norm.pdf(x))
-        return part_1 + part_2
-    
-
-    if (objective(begin) > 0 and objective(end)  > 0) or (objective(end) < 0 and objective(begin) < 0):
-        print('Whhhattt', 'How can I use bisection!!!!')
-
-    if (np.abs(objective(x) - 0) < 0.00001):
-        return x
-    if (objective(x) <0 and objective(end) > 0) or (objective(x) > 0 and objective(end) < 0):
-        return bisect_find_point(l_2, mean, sigma, minimum, maximum, x, end)
-    elif (objective(x) <0 and objective(begin) > 0) or (objective(x) > 0 and objective(begin) < 0):
-        return bisect_find_point(l_2, mean, sigma, minimum, maximum, begin, x)
+        return bisection(begin, x, objective)
 
 def get_adaptive_levels_co_2(initial_levels, number_of_levels, mean, sigma, epochs, minimum, maximum):
     losses = []
@@ -136,14 +106,16 @@ def get_adaptive_levels_co_2(initial_levels, number_of_levels, mean, sigma, epoc
     new_levels[0] = initial_levels[0]
     new_levels[-1] = initial_levels[-1]
     all_levels = [initial_levels]
-    mean = mean.item()
-    sigma = sigma.item()
-    minimum = minimum.item()
-    maximum = maximum.item()
     trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
     for epoch in range(epochs):
         indexes = list(range(len(initial_levels)))[1:-1]
-        initial_levels[0] = bisect_find_point(initial_levels[1], mean, sigma, minimum, maximum, 0, initial_levels[1])
+        trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
+        l_2 = initial_levels[1]
+        def objective(x):
+            part_1 = (l_2 - mean) * (trunc_norm.cdf(l_2) - trunc_norm.cdf(x)) + 2 * x * (trunc_norm.cdf(0) - trunc_norm.cdf(x))
+            part_2 = sigma ** 2 * (trunc_norm.pdf(l_2) - trunc_norm.pdf(x))
+            return part_1 + part_2
+        initial_levels[0] = bisection(0, initial_levels[1], objective)
         for index in indexes:
             if index == 1:
                 continue
@@ -164,31 +136,44 @@ def get_adaptive_levels_co_2(initial_levels, number_of_levels, mean, sigma, epoc
     return initial_levels, all_levels, losses
 
 
-def get_adaptive_levels_co_2(initial_levels, number_of_levels, mean, sigma, epochs, minimum, maximum):
+def get_adaptive_levels_co_3(initial_levels, number_of_levels, means, sigmas, norms, epochs, minimum, maximum):
     losses = []
     new_levels = np.zeros_like(initial_levels)
     new_levels[0] = initial_levels[0]
     new_levels[-1] = initial_levels[-1]
     all_levels = [initial_levels]
-    mean = mean.item()
-    sigma = sigma.item()
-    minimum = minimum.item()
-    maximum = maximum.item()
-    trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
+    trunc_norm = CondNormalTrunc(means, sigmas, norms, minimum, maximum)
     for epoch in range(epochs):
         indexes = list(range(len(initial_levels)))[1:-1]
-        initial_levels[0] = bisect_find_point(initial_levels[1], mean, sigma, minimum, maximum, 0, initial_levels[1])
+        def objective1(x):
+            init = 2 * x * (trunc_norm.cdf(0) - trunc_norm.cdf(x))
+            sum = 0.0
+            for i in range(len(means)):
+                F_n = TruncNorm(means[i], sigmas[i], minimum, maximum)
+                coeff = norms[i] / trunc_norm.total_norm
+                part1 = (initial_levels[2] - means[i]) * (F_n.cdf(initial_levels[2]) - F_n.cdf(x))
+                part2 = sigmas[i] ** 2 * (F_n.pdf(initial_levels[2]) - F_n.pdf(x))
+                sum += coeff * (part1 + part2)
+            sum += init
+            return sum
+        initial_levels[1] = bisection(0, initial_levels[2], objective1)
+
         for index in indexes:
             if index == 1:
                 continue
-            a = (initial_levels[index - 1] - mean) / (initial_levels[index + 1] - initial_levels[index - 1])
-            b = trunc_norm.cdf(initial_levels[index + 1]) - trunc_norm.cdf(initial_levels[index - 1])
-            c = (trunc_norm.pdf(initial_levels[index + 1]) - trunc_norm.pdf(initial_levels[index - 1])) / (initial_levels[index + 1] - initial_levels[index - 1])
-            initial_levels[index] = trunc_norm.ppf(
-                trunc_norm.cdf(initial_levels[index + 1]) + a * b + sigma ** 2 * c
-                )
-
-        losses.append(calculate_new_error(initial_levels, mean, sigma,  minimum, maximum))
+            def objective2(x):
+                init = (initial_levels[index + 1] - initial_levels[index - 1]) * (trunc_norm.cdf(initial_levels[index + 1]) - trunc_norm.cdf(x))
+                sum = 0.0
+                for i in range(len(means)):
+                    F_n = TruncNorm(means[i], sigmas[i], minimum, maximum)
+                    coeff = norms[i] / trunc_norm.total_norm
+                    part1 = (initial_levels[index - 1] - means[i]) * (F_n.cdf(initial_levels[index + 1]) - F_n.cdf(initial_levels[index - 1]))
+                    part2 = sigmas[i] ** 2 * (F_n.pdf(initial_levels[index + 1]) - F_n.pdf(initial_levels[index - 1]))
+                    sum += coeff * (part1 + part2)
+                sum += init
+                return sum
+            initial_levels[index] = bisection(initial_levels[index - 1], initial_levels[index + 1], objective2)
+        losses.append(0)
         print('Epoch', epoch, 'error', losses[-1])
         # initial_levels = new_levels
         all_levels.append(initial_levels)
@@ -252,6 +237,9 @@ class QuantizeMultiBucket(object):
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
         elif method == 'nuq5':
+            self.levels = get_exp_levels(bits, multiplier)
+            self.norm_type = 'fro'
+        elif method == 'nuq6':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
         elif method == 'none':
@@ -323,7 +311,7 @@ class QuantizeMultiBucket(object):
             self.levels = get_quantile_levels(self.bits, mean, sigma, -self.interval, self.interval)
             half_point = int(len(self.levels) / 2)
             initial_levels = self.levels
-            self.levels, all_levels, losses = get_adaptive_levels_co_3(initial_levels[half_point:], len(self.levels) / 2, mean, sigma, self.co_epochs, -interval, interval)
+            self.levels, all_levels, losses = get_adaptive_levels_co_3(initial_levels[half_point:], len(self.levels) / 2, self.norms['mean'], self.norms['sigma'], self.norms['norm'], self.co_epochs, -interval, interval)
             print('Levels are', self.levels)
         elif self.method == 'nuq3':
             self.previous_best = None

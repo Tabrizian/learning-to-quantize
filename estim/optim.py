@@ -14,6 +14,7 @@ class OptimizerFactory(object):
         self.opt = opt
         self.niters = 0
         self.optimizer = None
+        self.epoch = 0
         self.logger = LogCollector(opt)
         self.param_groups = None
         self.gest_used = False
@@ -50,11 +51,12 @@ class OptimizerFactory(object):
         if ((self.niters - opt.gvar_start) % opt.g_osnap_iter == 0
                 and self.niters >= opt.gvar_start):
             print(self.niters)
-            if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq' or opt.nuq_method =='nuq3'or opt.nuq_method =='nuq4' or opt.nuq_method == 'nuq5':  
-                mean, variance = gvar.gest.snap_online(model)
-                gvar.gest.qdq.set_mean_variance(mean, variance)
-                if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq3' or opt.nuq_method =='nuq4' or opt.nuq_method == 'nuq5':
-                   gvar.gest.qdq.update_levels()
+
+            if opt.g_estim == 'nuq' and opt.nuq_method != 'none':
+                mean, variance, norms = gvar.gest.snap_online(model)
+                gvar.gest.qdq.set_mean_variance(mean.cpu().item(), variance.cpu().item(), norms)
+            if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq3' or opt.nuq_method =='nuq4' or opt.nuq_method == 'nuq5' or opt.nuq_method == 'nuq6':
+               gvar.gest.qdq.update_levels()
         if ((self.niters - opt.gvar_start) % opt.g_bsnap_iter == 0
                 and self.niters > opt.gvar_start):
             print(self.niters)
@@ -73,3 +75,4 @@ class OptimizerFactory(object):
 
         profiler.end()
         return loss
+    

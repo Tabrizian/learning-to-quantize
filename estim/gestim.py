@@ -138,7 +138,7 @@ class GradientEstimator(object):
             self.random_indices = random_indices 
         return self.random_indices
 
-    def get_gradient_distribution(self, model, gviter):
+    def get_gradient_distribution(self, model, gviter, bucket_size):
         """
         gviter: Number of minibatches to apply on the model
         model: Model to be evaluated
@@ -202,21 +202,21 @@ class GradientEstimator(object):
         
         variances = []
         means = []
-        random_indices = self.get_random_index(model, 4)
-        for index in random_indices:
-            variance_estimate_layer = variance_estimates[index[0]]
-            mean_estimate_layer = mean_estimates[index[0]]
+        # random_indices = self.get_random_index(model, 4)
+        # for index in random_indices:
+        #     variance_estimate_layer = variance_estimates[index[0]]
+        #     mean_estimate_layer = mean_estimates[index[0]]
 
-            for weight in index[1:]:
-                variance_estimate_layer = variance_estimate_layer[weight]
-                variance_estimate_layer.squeeze_()
+        #     for weight in index[1:]:
+        #         variance_estimate_layer = variance_estimate_layer[weight]
+        #         variance_estimate_layer.squeeze_()
 
-                mean_estimate_layer = mean_estimate_layer[weight]
-                mean_estimate_layer.squeeze_()
-            variance = variance_estimate_layer / (gviter)
+        #         mean_estimate_layer = mean_estimate_layer[weight]
+        #         mean_estimate_layer.squeeze_()
+        #     variance = variance_estimate_layer / (gviter)
 
-            variances.append(variance)
-            means.append(mean_estimate_layer)
+        #     variances.append(variance)
+        #     means.append(mean_estimate_layer)
         
         total_mean = torch.tensor(0, dtype=float)
         for mean_estimate in mean_estimates:
@@ -237,6 +237,25 @@ class GradientEstimator(object):
         total_variance_unconcatenated = sum([torch.sum(variance) / variance.numel() for variance in variance_estimates_unconcatenated]) / len(mean_estimates)
 
         return variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated
+
+    def get_norm_distribution(self, model, gviter, bucket_size=1024):
+        norms = {}
+        for i in range(gviter):
+            minibatch_gradient = self.grad_estim(model)
+            flattened_parameters, less_flattened = self.flatten(minibatch_gradient)
+            num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
+            for bucket_i in range(num_bucket):
+                start = bucket_i * bucket_size
+                end = min((bucket_i + 1) * bucket_size, len(flattened_parameters))
+                if (end == len(flattened_parameters)):
+                    continue
+                x_bucket = flattened_parameters[start:end].clone()
+                norm = x_bucket.norm()
+                if norm.cpu() in norms.keys():
+                    print('It shouldn\'t happend!!!!!!!!!!!')
+                norms[norm.cpu()] =  x_bucket
+        return norms
+    
     def state_dict(self):
         return {}
 

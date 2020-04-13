@@ -40,7 +40,22 @@ class NUQEstimator(GradientEstimator):
             unconcatenated_buckets.append(torch.cat(normalized_unconcatenated_buckets))
         return torch.cat(normalized_buckets), unconcatenated_buckets
 
-        
+    
+    def get_norm_distribution(self, model, gviter, bucket_size=1024):
+        norms = {}
+        for i in range(gviter):
+            minibatch_gradient = self.grad_estim(model)
+            flattened_parameters, less_flattened = self.flatten(minibatch_gradient)
+            num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
+            for bucket_i in range(num_bucket):
+                start = bucket_i * bucket_size
+                end = min((bucket_i + 1) * bucket_size, len(flattened_parameters))
+                x_bucket = flattened_parameters[start:end].clone()
+                if bucket_i not in norms.keys():
+                    norms[bucket_i] = []
+                norms[bucket_i].append(x_bucket)
+        return norms
+
     def snap_online(self, model):
         total_variance = 0
         iterations = self.opt.nuq_number_of_samples 
@@ -50,16 +65,6 @@ class NUQEstimator(GradientEstimator):
                 mean += [torch.zeros_like(p)]
 
         for i in range(iterations):
-            acc_grad = None
-            if acc_grad is None:
-                acc_grad = []
-                with torch.no_grad():
-                    for p in model.parameters():
-                        acc_grad += [torch.zeros_like(p)]
-            else:
-                for a in acc_grad:
-                    a.zero_()
-
             model.zero_grad()
             data = next(self.data_iter)
             loss = model.criterion(model, data)
@@ -81,6 +86,11 @@ class NUQEstimator(GradientEstimator):
         for i, a in enumerate(mean):
             mean[i] /= iterations
         
+        norm_results = {
+            'sigma': [],
+            'norm': [],
+            'mean': []
+        }
         for i in range(iterations):
             variance = 0.0
             acc_grad = None
@@ -94,9 +104,11 @@ class NUQEstimator(GradientEstimator):
                     a.zero_()
 
             model.zero_grad()
-            data = next(self.data_iter)
-            loss = model.criterion(model, data)
-            grad = torch.autograd.grad(loss, model.parameters())
+            grad = self.grad_estim(model)
+            flattened, _ = self.flatten(grad)
+            norm_results['sigma'].append(torch.sqrt(torch.var(flattened)).cpu().item())
+            norm_results['mean'].append(torch.mean(flattened).cpu().item())
+            norm_results['norm'].append(torch.norm(flattened).cpu().item())
             _, normalized_grad = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
             final_normalized_grad = []
             for item1, item2 in zip(normalized_grad, grad):
@@ -111,9 +123,8 @@ class NUQEstimator(GradientEstimator):
                 total_variance += variance
         total_variance /= (iterations * nw)
         total_mean = sum([item.sum() for item in mean]) / (nw * iterations)
-        
-        return total_mean, total_variance
-        
+        print(norm_results)
+        return total_mean, total_variance, norm_results
 
     def grad(self, model_new, in_place=False):
         model = model_new
