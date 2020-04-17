@@ -33,7 +33,58 @@ class GradientEstimator(object):
         pass
 
     def snap_online(self, model):
-        pass
+        total_variance = 0
+        iterations = self.opt.nuq_number_of_samples 
+        mean = []
+        with torch.no_grad():
+            for p in model.parameters():
+                mean += [torch.zeros_like(p)]
+
+        for i in range(iterations):
+            grad = self.grad_estim(model)
+            _, normalized_grad = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            final_normalized_grad = []
+            for item1, item2 in zip(normalized_grad, grad):
+                final_normalized_grad.append(item1.view(item2.shape))
+            
+            grad = final_normalized_grad
+            layers = len(list(model.parameters()))
+
+            with torch.no_grad():
+                for g, a in zip(grad, mean):
+                    #if len(a.shape) != 1:
+                    a += g
+        
+        nw = sum([w.numel() for w in model.parameters()])
+        for i, a in enumerate(mean):
+            mean[i] /= iterations
+        
+        norm_results = {
+            'sigma': [],
+            'norm': [],
+            'mean': []
+        }
+        for i in range(iterations):
+            variance = 0.0
+            grad = self.grad_estim(model)
+            flattened, _ = self.flatten(grad)
+            norm_results['sigma'].append(torch.sqrt(torch.var(flattened)).cpu().item())
+            norm_results['mean'].append(torch.mean(flattened).cpu().item())
+            norm_results['norm'].append(torch.norm(flattened).cpu().item())
+            _, normalized_grad = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            final_normalized_grad = []
+            for item1, item2 in zip(normalized_grad, grad):
+                final_normalized_grad.append(item1.view(item2.shape))
+            grad = final_normalized_grad
+            layers = len(list(model.parameters()))
+
+            for ee, gg in zip(mean, grad):
+                # if len(ee.shape) != 1:
+                variance += (gg-ee).pow(2).sum()
+            total_variance += variance
+        total_variance /= (iterations * nw)
+        total_mean = sum([item.sum() for item in mean]) / (nw * iterations)
+        return total_mean, total_variance, norm_results
 
     def grad(self, model_new, in_place=False, data=None):
         raise NotImplementedError('grad not implemented')
@@ -118,7 +169,7 @@ class GradientEstimator(object):
                 normalized_unconcatenated_buckets.append(torch.div(x_bucket, norm + torch.tensor(1e-7)))
             unconcatenated_buckets.append(torch.cat(normalized_unconcatenated_buckets))
         return torch.cat(normalized_buckets), unconcatenated_buckets
-         
+
     def get_random_index(self, model, number):
         if self.random_indices == None:
             parameters = list(model.parameters())
