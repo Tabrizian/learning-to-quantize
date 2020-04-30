@@ -1,4 +1,5 @@
 from scipy.stats import truncnorm, norm
+import numpy as np
 
 class Normal:
     def __init__(self, mean, sigma):
@@ -34,8 +35,6 @@ class CondNormal:
         self.total_norm = 0.0
         for norm in norms:
             self.total_norm += norm
-        
-
 
     def cdf(self, x):
         result = 0.0
@@ -54,29 +53,20 @@ class CondNormal:
 
 class CondNormalTrunc:
     def __init__(self, means, sigmas, norms, begin, end):
-        self.means = means
-        self.sigmas = sigmas
-        self.norms = norms
-        self.total_norm = 0.0
-        for norm in norms:
-            self.total_norm += norm
+        self.means = np.asarray(means)
+        self.sigmas = np.asarray(sigmas)
+        self.norms = np.asarray(norms)
+        self.end = end
+        self.total_norm = np.sum(self.norms)
         
-        self.a = []
-        self.b = []
-        for i in range(len(means)):
-            self.a.append((begin - means[i]) / sigmas[i])
-            self.b.append((end - means[i]) / sigmas[i])
+        self.a = (begin - self.means) / self.sigmas
+        self.b = (end - self.means) / self.sigmas
+        self.coeff = self.norms / self.total_norm
 
     def cdf(self, x):
-        result = 0.0
-        for i in range(len(self.means)):
-            result += self.norms[i] / self.total_norm * truncnorm.cdf(x, self.a[i], self.b[i], loc=self.means[i], scale=self.sigmas[i])
-
-        return result
+        cdfs = truncnorm.cdf(x, self.a, self.b, loc=self.means, scale=self.sigmas)
+        return np.sum(np.dot(cdfs, self.coeff))
 
     def pdf(self, x):
-        result = 0.0
-        for i in range(len(self.means)):
-            result += self.norms[i] / self.total_norm * truncnorm.pdf(x, self.a[i], self.b[i], loc=self.means[i], scale=self.sigmas[i])
-
-        return result
+        pdfs = truncnorm.pdf(x, self.a, self.b, loc=self.means, scale=self.sigmas)
+        return np.sum(np.dot(pdfs, self.coeff))
