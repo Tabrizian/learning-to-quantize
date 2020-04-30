@@ -54,13 +54,23 @@ class OptimizerFactory(object):
 
             if opt.g_estim == 'nuq' and opt.nuq_method != 'none':
                 mean, variance, norms = gvar.gest.snap_online(model)
-                gvar.gest.qdq.set_mean_variance(mean.cpu().item(), variance.cpu().item(), norms)
-            if opt.nuq_method == 'nuq2' or opt.nuq_method == 'nuq2inf' or opt.nuq_method == 'nuq3' or opt.nuq_method =='nuq4' or opt.nuq_method == 'nuq5' or opt.nuq_method == 'nuq6':
-               gvar.gest.qdq.update_levels()
+                if opt.nuq_parallel == 'ngpu':
+                    for qdq in gvar.gest.qdq:
+                        qdq.set_mean_variance(mean.cpu().item(), variance.cpu().item(), norms)
+                else:
+                    gvar.gest.qdq.set_mean_variance(mean.cpu().item(), variance.cpu().item(), norms)
+
+            if opt.nuq_method == 'amq' or opt.nuq_method =='nuq4' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
+                if opt.nuq_parallel == 'ngpu':
+                    for qdq in gvar.gest.qdq:
+                        qdq.update_levels()
+                else:
+                    gvar.gest.qdq.update_levels()
+               
         if ((self.niters - opt.gvar_start) % opt.g_bsnap_iter == 0
                 and self.niters > opt.gvar_start):
             print(self.niters)
-            if opt.nuq_method == 'nuq4': 
+            if opt.nuq_method == 'nuq4':
                    gvar.gest.qdq.bits += 1
 
         pg_used = gvar.gest_used

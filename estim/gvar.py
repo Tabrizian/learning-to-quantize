@@ -7,7 +7,7 @@ import numpy as np
 
 from estim.sgd import SGDEstimator
 from estim.nuq import NUQEstimator
-from estim.nuq import NUQEstimatorSingleGPUParallel
+#from estim.nuq import NUQEstimatorSingleGPUParallel
 from estim.nuq import NUQEstimatorMultiGPUParallel
 
 
@@ -20,9 +20,9 @@ class MinVarianceGradient(object):
         elif opt.g_estim == 'nuq':
             if opt.nuq_parallel == 'no':
                 gest = NUQEstimator(data_loader, opt, tb_logger)
-            elif opt.nuq_parallel == 'gpu1':
-                gest = NUQEstimatorSingleGPUParallel(
-                    data_loader, opt, tb_logger)
+#            elif opt.nuq_parallel == 'gpu1':
+#                gest = NUQEstimatorSingleGPUParallel(
+#                    data_loader, opt, tb_logger)
             else:
                 gest = NUQEstimatorMultiGPUParallel(
                     data_loader, opt, tb_logger)
@@ -105,9 +105,9 @@ class MinVarianceGradient(object):
                         number_of_negative_levels += 1
                 tb_logger.log_value('positive_levels', float(number_of_positive_levels), step=niters)
                 tb_logger.log_value('negative_levels', float(number_of_negative_levels), step=niters)
-                tb_logger.log_value('co_error', float(self.gest.qdq.error), step=niters)
+                tb_logger.log_value('nb_error', float(self.gest.qdq.error), step=niters)
 
-            if self.opt.nuq_method == 'nuq3' or self.opt.nuq_method == 'nuq4' or self.opt.nuq_method == 'nuq5' or self.opt.nuq_method == 'nuq6':
+            if self.opt.nuq_method == 'amq' or self.opt.nuq_method == 'nuq4':
                 tb_logger.log_value('multiplier', float(self.gest.qdq.multiplier), step=niters)
         
         print('est_var is', var_e)
