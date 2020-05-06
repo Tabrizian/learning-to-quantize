@@ -29,19 +29,19 @@ def slurm(sargs, prefix):
     njobs, ntasks, partition = sargs.split(',', 2)
     njobs = int(njobs)
     ntasks = int(ntasks)
-    # njobs = 5  # Number of array jobs
-    # ntasks = 4  # Number of running jobs
-    # partition = 'gpu'
+    #njobs = 5  # Number of array jobs
+    #ntasks = 4  # Number of running jobs
+    partition = 'gpu'
     jobs = [str(i) for i in range(njobs)]
     sbatch_f = """#!/bin/bash
 
 #SBATCH --job-name=array
 #SBATCH --output=jobs/log/array_%A_%a.log
 #SBATCH --array=0-{njobs}
-#SBATCH --time=24:00:00
+#SBATCH --time=300:00:00
 #SBATCH --gres=gpu:1              # Number of GPUs (per node)
-#SBATCH -c 5
-#SBATCH --mem=16G
+#SBATCH -c 9
+#SBATCH --mem=18G
 #SBATCH -p {partition}
 #SBATCH --ntasks=1
 

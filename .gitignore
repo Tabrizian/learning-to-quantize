@@ -1,5 +1,5 @@
 data/
-jobs/
+jobs/*
 !jobs/.gitkeep
 !jobs/log/.gitkeep
 runs/

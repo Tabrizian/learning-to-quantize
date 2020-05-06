@@ -55,9 +55,13 @@ class GradientEstimator(object):
         for i in range(iterations):
             grad = grads[i]
             flattened, flattened_lb = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            flattened_lb_flt, _ = self.flatten(flattened_lb) 
             flattened_unnormalized, flattened_unnormalized_lb = self.flatten(grad)
             with torch.no_grad():
-                tsum += flattened
+                if self.opt.nuq_layer == 0:
+                    tsum += flattened_lb_flt
+                else:
+                    tsum += flattened
             if self.opt.nuq_layer == 1:
                 flattened_unnormalized, _ = self.flatten(grad)
                 num_bucket = int(np.ceil(len(flattened) / bucket_size))
@@ -95,15 +99,17 @@ class GradientEstimator(object):
         total_mean = torch.sum(mean) / (nw)
 
         for i in range(iterations):
-            variance = 0.0
             grad = grads[i]
-            flattened, _ = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            flattened, flattened_lb = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
 
-            variance += (flattened-mean).pow(2).sum()
-            total_variance += variance
+            flattened_lb_flt, _ = self.flatten(flattened_lb)
+
+            with torch.no_grad():
+                if self.opt.nuq_layer == 0:
+                    total_variance += (flattened_lb_flt - mean).pow(2).sum()
+                else:
+                    total_variance += (flattened - mean).pow(2).sum()
         
-        total_variance /= (iterations * nw)
-
         norm_results = {
             'norm': [],
             'sigma': [],
@@ -113,19 +119,20 @@ class GradientEstimator(object):
         i = 0
         for bucket in buckets_normalized:
             current_bk = torch.stack(buckets_normalized[bucket])
-            mean = torch.mean(current_bk, dim=0)
-            variance = torch.sum((current_bk - mean)**2) / (iterations * current_bk[0].size()[0])
             norm_results['mean'].append(torch.mean(current_bk).cpu().item())
-            norm_results['sigma'].append(torch.sqrt(torch.mean(torch.var(current_bk, dim=0))).cpu().item())
+            norm_results['sigma'].append(torch.sqrt(torch.mean(torch.var(current_bk, dim=0, unbiased=False))).cpu().item())
             norm_results['norm'].append((buckets[i] / iterations).cpu().item())
             i += 1
 
-        # indexes = random.sample(range(len(norm_results['mean'])), 500)
-        # norm_results['mean'] = np.array(norm_results['mean'])[indexes].tolist()
-        # norm_results['sigma'] = np.array(norm_results['sigma'])[indexes].tolist()
-        # norm_results['norm'] = np.array(norm_results['norm'])[indexes].tolist()
-        import ipdb; ipdb.set_trace();
-        return torch.mean(torch.tensor(norm_results['mean'])), torch.mean(torch.tensor(norm_results['sigma']) ** 2), norm_results
+        if len(norm_results['mean']) > self.opt.dist_num:
+            indexes = np.argsort(-np.asarray(norm_results['norm']))[:self.opt.dist_num]
+            norm_results['mean'] = np.array(norm_results['mean'])[indexes].tolist()
+            norm_results['sigma'] = np.array(norm_results['sigma'])[indexes].tolist()
+            norm_results['norm'] = np.array(norm_results['norm'])[indexes].tolist()
+        total_variance /= (iterations * nw)
+        print(norm_results)
+
+        return total_mean, total_variance, norm_results
 
         #return torch.tensor(0), torch.tensor(0.01), norm_results
 

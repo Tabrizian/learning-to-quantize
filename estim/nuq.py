@@ -94,6 +94,7 @@ class NUQEstimatorMultiGPUParallel(GradientEstimator):
                 with torch.cuda.device(i):
                     self.models += [copy.deepcopy(model_new)]
                     self.models[-1] = self.models[-1].cuda()
+
         else:
             # sync weights
             for i in range(1, self.ngpu):
@@ -125,8 +126,8 @@ class NUQEstimatorMultiGPUParallel(GradientEstimator):
                         flattened_array, _ = self.flatten(models[i].parameters())
                         gradient_quantized = self.qdq[i].quantize(flattened_array, layers) / self.ngpu
                         unflattened_array = self.unflatten(gradient_quantized, models[i].parameters())
-                        for p in models[i].parameters():
-                            p.grad.copy_(unflattened_array)
+                        for p, q in zip(models[i].parameters(), unflattened_array):
+                            p.grad.copy_(q)
                     else:
                         for p in models[i].parameters():
                             p.grad.copy_(self.qdq[i].quantize(p.grad, layers) / self.ngpu)

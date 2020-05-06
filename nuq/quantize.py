@@ -25,6 +25,7 @@ def calculate_new_error(positive_levels, mean, sigma, min, max):
     
     return 2 * np.sum(sum)
 
+
 def calculate_norm_error(positive_levels, means, sigmas, norms, min, max):
     trunc_norm = CondNormalTrunc(means, sigmas, norms, min, max)
     sum = []
@@ -34,9 +35,9 @@ def calculate_norm_error(positive_levels, means, sigmas, norms, min, max):
             index_level = get_level(x, positive_levels)
             variance = (x - positive_levels[index_level]) * (positive_levels[index_level + 1] - x)
             return variance * normal_func
-        sum.append(integrate.quad(lambda x: inline_func(x), positive_levels[index], positive_levels[index + 1]))
+        sum.append(integrate.fixed_quad(lambda x: inline_func(x), positive_levels[index], positive_levels[index + 1], n=40))
 
-    return np.sum(sum)
+    return 2 * np.sum(sum)
 
 
 def get_uniform_levels(bits):
@@ -49,10 +50,11 @@ def get_quantile_levels(bits, mean, sigma, min, max):
     """quantile levels """
     trunc_norm = TruncNorm(mean, sigma, min, max)
     num_levels = 2 << bits - 1
-    cdf_points = np.linspace(0, 1, num=num_levels - 2)
+    cdf_points = np.linspace(0, 1, num=num_levels)
     levels = [trunc_norm.ppf(level) for level in cdf_points]
     
-    levels = [min] + levels + [max]
+    levels[0] = min
+    levels[-1] = max
     return levels
 
 def get_level(x, levels):
@@ -287,6 +289,7 @@ class QuantizeMultiBucket(object):
         self.bucket_size = bucket_size
         self.bits = bits
         self.co_epochs = kwargs['cd_epochs']
+        self.path = kwargs['path']
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
         self.mean = 0
@@ -350,13 +353,13 @@ class QuantizeMultiBucket(object):
         self.norms = norms
         self.number_of_iterations += 1
         sigma = torch.sqrt(torch.tensor(variance)).cpu().item()
-        half_point = int(len(elf.levels) / 2)
+        half_point = int(len(self.levels) / 2)
         half_levels = self.levels[half_point:].cpu()
         self.error = calculate_norm_error(half_levels, self.norms['mean'], self.norms['sigma'], self.norms['norm'], -self.interval, self.interval)
         if self.method == 'amq':
-            np.savetxt('norms_mean' + str(self.number_of_iterations), np.asarray(self.norms['mean']))
-            np.savetxt('norms_sigma' + str(self.number_of_iterations), np.asarray(self.norms['sigma']))
-            np.savetxt('norms_norm' + str(self.number_of_iterations), np.asarray(self.norms['norm']))
+            np.savetxt(self.path + '/norms_mean' + str(self.number_of_iterations), np.asarray(self.norms['mean']))
+            np.savetxt(self.path + '/norms_sigma' + str(self.number_of_iterations), np.asarray(self.norms['sigma']))
+            np.savetxt(self.path + '/norms_norm' + str(self.number_of_iterations), np.asarray(self.norms['norm']))
 
 
     def update_levels(self):

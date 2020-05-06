@@ -105,7 +105,7 @@ class MinVarianceGradient(object):
                         number_of_negative_levels += 1
                 tb_logger.log_value('positive_levels', float(number_of_positive_levels), step=niters)
                 tb_logger.log_value('negative_levels', float(number_of_negative_levels), step=niters)
-                tb_logger.log_value('nb_error', float(self.gest.qdq.error), step=niters)
+                tb_logger.log_value('nb_error', self.gest.qdq.error.item(), step=niters)
 
             if self.opt.nuq_method == 'amq' or self.opt.nuq_method == 'nuq4':
                 tb_logger.log_value('multiplier', float(self.gest.qdq.multiplier), step=niters)
