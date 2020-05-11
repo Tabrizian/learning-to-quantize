@@ -113,6 +113,7 @@ def add_args():
     parser.add_argument('--untrain_steps', default=0, type=int)
     parser.add_argument('--untrain_lr', default=0.001, type=float)
     parser.add_argument('--untrain_std', default=0.001, type=float)
+    parser.add_argument('--nuq_symmetric', default=False, action='store_true')
     parser.add_argument('--nuq_parallel', default='no', help='no|gpu1|ngpu')
     parser.add_argument('--dist_num', default=20, type=int)
     parser.add_argument('--nuq_number_of_samples',
@@ -130,7 +131,7 @@ def opt_to_nuq_kwargs(opt):
             'bucket_size': opt.nuq_bucket_size, 'method': opt.nuq_method,
             'multiplier': opt.nuq_mul, 'cd_epochs': opt.nuq_cd_epochs,
             'number_of_samples': opt.nuq_number_of_samples,
-            'path': opt.logger_name,
+            'path': opt.logger_name, 'symmetric': opt.nuq_symmetric,
             'interval': opt.nuq_truncated_interval, 'learning_rate': opt.nuq_learning_rate}
 
 

@@ -2,14 +2,15 @@ import numpy as np
 import torch
 from cuquant import QDQ
 import math
-from estim.dist import Normal, TruncNorm, CondNormal, CondNormalTrunc
+from estim.dist import TruncNorm, CondNormalTrunc, CondNormalTruncHist
 
 import time
 from scipy.stats import truncnorm, norm
 import scipy.integrate as integrate
 
 EPS = 1e-7
- 
+
+
 def calculate_new_error(positive_levels, mean, sigma, min, max):
     sum = []
     trunc_norm = TruncNorm(mean, sigma, min, max)
@@ -17,12 +18,15 @@ def calculate_new_error(positive_levels, mean, sigma, min, max):
         def inline_func(x):
             normal_func = trunc_norm.pdf(x)
             index_level = get_level(x, positive_levels)
-            variance = (x - positive_levels[index_level]) * (positive_levels[index_level + 1] - x)
+            variance = (x - positive_levels[index_level]) * \
+                (positive_levels[index_level + 1] - x)
             return variance * normal_func
-        sum.append(integrate.quad(lambda x: inline_func(x), positive_levels[index], positive_levels[index + 1]))
+        sum.append(integrate.quad(lambda x: inline_func(
+            x), positive_levels[index], positive_levels[index + 1]))
 
-    sum.append(integrate.quad(lambda x: (positive_levels[0] ** 2 - x ** 2) * trunc_norm.pdf(x), 0, positive_levels[0]))
-    
+    sum.append(integrate.quad(lambda x: (
+        positive_levels[0] ** 2 - x ** 2) * trunc_norm.pdf(x), 0, positive_levels[0]))
+
     return 2 * np.sum(sum)
 
 
@@ -33,9 +37,11 @@ def calculate_norm_error(positive_levels, means, sigmas, norms, min, max):
         def inline_func(x):
             normal_func = trunc_norm.pdf(x)
             index_level = get_level(x, positive_levels)
-            variance = (x - positive_levels[index_level]) * (positive_levels[index_level + 1] - x)
+            variance = (x - positive_levels[index_level]) * \
+                (positive_levels[index_level + 1] - x)
             return variance * normal_func
-        sum.append(integrate.fixed_quad(lambda x: inline_func(x), positive_levels[index], positive_levels[index + 1], n=40))
+        sum.append(integrate.fixed_quad(lambda x: inline_func(
+            x), positive_levels[index], positive_levels[index + 1], n=40))
 
     return 2 * np.sum(sum)
 
@@ -46,154 +52,185 @@ def get_uniform_levels(bits):
     levels_uni = np.linspace(-1, 1, num=num_levels)
     return levels_uni
 
+
 def get_quantile_levels(bits, mean, sigma, min, max):
     """quantile levels """
     trunc_norm = TruncNorm(mean, sigma, min, max)
     num_levels = 2 << bits - 1
     cdf_points = np.linspace(0, 1, num=num_levels)
     levels = [trunc_norm.ppf(level) for level in cdf_points]
-    
+
     levels[0] = min
     levels[-1] = max
     return levels
 
-def get_level(x, levels):
-    for index, level in enumerate(levels[0:len(levels) - 1]):
-        if x >= levels[index] and x < levels[index + 1]:
-            return index
 
-def truncated_cdf(x, minimum, maximum, loc, scale):
-    a = norm.cdf(x, loc=loc, scale=scale) - norm.cdf(minimum, loc=loc, scale=scale)
-    b = norm.cdf(maximum, loc=loc, scale=scale) - norm.cdf(minimum, loc=loc, scale=scale)
-    return a / b
+def get_uniform_levels(bits):
+    """uniform (QSGD)"""
+    num_levels = 2 << bits - 1
+    levels_uni = np.linspace(-1, 1, num=num_levels)
+    return levels_uni
 
-def calculate_estimated_error(mean, sigma, levels, min, max):
-    sum = []
-    trunc_norm = TruncNorm(mean, sigma, min, max)
-    for index, level in enumerate(levels[:-1]):
-        def inline_func(x):
-            normal_func = trunc_norm.pdf(x)
-            index_level = get_level(x, levels)
-            variance = (x - levels[index_level]) * (levels[index_level + 1] - x)
-            return variance * normal_func
 
-        sum.append(integrate.quad(lambda x: inline_func(x), levels[index], levels[index + 1]))
+def get_exp_levels(bits, multiplier=0.5):
+    """ exponential (NUQSGD)
 
-    return np.sum(sum)
+    multiplier: is used to modify levels_exp based on the number of bits
+    """
+    num_levels = 2 << bits - 1
 
-def get_adaptive_levels_co(initial_levels, number_of_levels, mean, sigma, epochs, minimum, maximum):
-    losses = []
-    new_levels = np.zeros_like(initial_levels)
-    new_levels[0] = initial_levels[0]
-    new_levels[-1] = initial_levels[-1]
-    all_levels = [initial_levels]
-    mean = mean.item()
-    sigma = sigma.item()
-    minimum = minimum.item()
-    maximum = maximum.item()
-    trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
-    for epoch in range(epochs):
-        indexes = list(range(len(initial_levels)))[1:-1]
-        for index in indexes:
-            a = (initial_levels[index - 1] - mean) / (initial_levels[index + 1] - initial_levels[index - 1])
-            b = trunc_norm.cdf(initial_levels[index + 1]) - trunc_norm.cdf(initial_levels[index - 1])
-            c = (trunc_norm.pdf(initial_levels[index + 1]) - trunc_norm.pdf(initial_levels[index - 1])) / (initial_levels[index + 1] - initial_levels[index - 1])
-            initial_levels[index] = trunc_norm.ppf(
-                trunc_norm.cdf(initial_levels[index + 1]) + a * b + sigma ** 2 * c
-                )
+    levels = sum([[-multiplier**j for j in range(num_levels >> 1)],
+                  [multiplier**j for j in reversed(range(num_levels >> 1))]],
+                 [])
+    return np.asarray(levels)
 
-        losses.append(calculate_estimated_error(initial_levels,mean, sigma,  minimum, maximum))
-        # initial_levels = new_levels
-        all_levels.append(initial_levels.copy())
-    return initial_levels, all_levels, losses
 
-def bisection(begin, end, objective):
+def finite_diff_gradient_descent(f, begin, end, x0=None, niters=10, lr=1):
+    eps = (end-begin)/1000
+    if x0 is None:
+        x0 = (begin + end) / 2
+    x = x0
+    for i in range(niters):
+        df = (f(x+eps)-f(x-eps))/(2*eps)
+        x -= lr*df
+    return x
+
+
+def bisection(begin, end, f):
     x = (begin + end) / 2
-    res = objective(x)
-    start = objective(begin)
-    finish = objective(end)
-    if (np.abs(res) < 1e-7):
+    if (np.abs(f(x) - 0) < 1e-7):
         return x
-    if (res <0 and finish > 0) or (res > 0 and finish < 0):
-        return bisection(x, end, objective)
-    elif (res <0 and start > 0) or (res > 0 and start < 0):
-        return bisection(begin, x, objective)
+    both_negative = f(begin) < 0 and f(end) < 0
+    both_positive = f(begin) > 0 and f(end) > 0
+    if both_negative or both_positive:
+        print('Bisection failed')
 
-def alq(initial_levels, number_of_levels, mean, sigma, epochs, minimum, maximum):
-    losses = []
-    new_levels = np.zeros_like(initial_levels)
-    new_levels[0] = initial_levels[0]
-    new_levels[-1] = initial_levels[-1]
-    all_levels = [initial_levels]
-    trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
+    x_neg_end_pos = f(x) < 0 and f(end) > 0
+    x_pos_end_neg = f(x) > 0 and f(end) < 0
+    if x_neg_end_pos or x_pos_end_neg:
+        return bisection(x, end, f)
+    return bisection(begin, x, f)
+
+def amq_norm_based(initial_point, grad_dist, bits, lr=0.1, epochs=200):
+    mul = initial_point
+    s = 2 ** (bits - 1) - 1
+    all_mul = []
+    iter = 0
     for epoch in range(epochs):
-        indexes = list(range(len(initial_levels)))[1:-1]
-        trunc_norm = TruncNorm(mean, sigma, minimum, maximum)
-        l_2 = initial_levels[1]
-        def objective(x):
-            part_1 = (l_2 - mean) * (trunc_norm.cdf(l_2) - trunc_norm.cdf(x)) + 2 * x * (trunc_norm.cdf(0) - trunc_norm.cdf(x))
-            part_2 = sigma ** 2 * (trunc_norm.pdf(l_2) - trunc_norm.pdf(x))
-            return part_1 + part_2
-        initial_levels[0] = bisection(0, initial_levels[1], objective)
-        for index in indexes:
-            a = (initial_levels[index - 1] - mean) / (initial_levels[index + 1] - initial_levels[index - 1])
-            b = trunc_norm.cdf(initial_levels[index + 1]) - trunc_norm.cdf(initial_levels[index - 1])
-            c = (trunc_norm.pdf(initial_levels[index + 1]) - trunc_norm.pdf(initial_levels[index - 1])) / (initial_levels[index + 1] - initial_levels[index - 1])
-            initial_levels[index] = trunc_norm.ppf(
-                trunc_norm.cdf(initial_levels[index + 1]) + a * b + sigma ** 2 * c
-                )
+        sum = 0.0
+        for norm, mean, sigma, coeff in zip(
+                grad_dist.norms,
+                grad_dist.means,
+                grad_dist.sigmas,
+                grad_dist.coeff):
 
-        losses.append(calculate_new_error(initial_levels, mean, sigma,  minimum, maximum))
-        # initial_levels = new_levels
-        all_levels.append(initial_levels.copy())
-    negative_levels = [-level for level in initial_levels]
-    negative_levels.reverse()
-    initial_levels = negative_levels + initial_levels
-    return initial_levels, all_levels, losses
+            dist_comp = TruncNorm(
+                mean, sigma, grad_dist.begin, grad_dist.end, grad_dist.nbins)
 
-def alq_nb(initial_levels, number_of_levels, means, sigmas, norms, epochs, minimum, maximum):
-    losses = []
-    new_levels = initial_levels.copy()
-    all_levels = [new_levels]
-    trunc_norm = CondNormalTrunc(means, sigmas, norms, minimum, maximum)
+            # from eq G.3 in Appendix
+            def arg1_1(j):
+                return mean * (j * mul ** (j - 1) + (j + 1) * mul ** j) \
+                    - (2 * j + 1) * mul ** (2 * j)
+            arg1 = np.sum(np.asarray(
+                [arg1_1(j)*(dist_comp.cdf(mul**j) - dist_comp.cdf(mul**(j+1)))
+                    for j in range(0, s)]))
+
+            def arg2_1(j):
+                return j * mul ** (j - 1) + (j + 1) * mul ** j
+            arg2 = np.sum(np.asarray(
+                [arg2_1(j) * (dist_comp.pdf(mul ** (j + 1))
+                              - dist_comp.pdf(mul ** (j)))
+                    for j in range(0, s)]))
+            sum += coeff * (arg1 + sigma ** 2 * arg2)
+
+        gradient = 2 * s * (mul ** (2 * s - 1)) * \
+            (grad_dist.cdf(mul ** s) - grad_dist.cdf(0)) + sum
+        mul = mul - lr * gradient
+        iter += 1
+        all_mul.append(mul)
+    return mul, all_mul
+
+
+def amq_norm_less(initial_point, grad_dist, bits, lr=0.1, epochs=200):
+    mul = initial_point
+    s = 2 ** (bits - 1) - 1
+    mean = grad_dist.mean
+    sigma = grad_dist.sigma
+    all_mul = []
+    iter = 0
     for epoch in range(epochs):
-        indexes = list(range(len(new_levels)))[1:-1]
-        def objective1(x):
-            init = 2 * x * (trunc_norm.cdf(0) - trunc_norm.cdf(x))
-            sum = 0.0
-            for i in range(len(means)):
-                F_n = TruncNorm(means[i], sigmas[i], minimum, maximum)
-                coeff = norms[i] / trunc_norm.total_norm
-                part1 = (new_levels[1] - means[i]) * (F_n.cdf(new_levels[1]) - F_n.cdf(x))
-                part2 = sigmas[i] ** 2 * (F_n.pdf(new_levels[1]) - F_n.pdf(x))
-                sum += coeff * (part1 + part2)
-            sum += init
-            return sum
-        print('Start:', 0, 'end', new_levels[1])
-        new_levels[0] = bisection(0, new_levels[1], objective1)
+        sum = 0.0
 
-        for index in indexes:
-            print(index + 1, index - 1)
-            def objective2(x):
-                init = (new_levels[index + 1] - new_levels[index - 1]) * (trunc_norm.cdf(new_levels[index + 1]) - trunc_norm.cdf(x))
-                sum = 0.0
-                for i in range(len(means)):
-                    F_n = TruncNorm(means[i], sigmas[i], minimum, maximum)
-                    coeff = norms[i] / trunc_norm.total_norm
-                    part1 = (new_levels[index - 1] - means[i]) * (F_n.cdf(new_levels[index + 1]) - F_n.cdf(new_levels[index - 1]))
-                    part2 = sigmas[i] ** 2 * (F_n.pdf(new_levels[index + 1]) - F_n.pdf(new_levels[index - 1]))
-                    sum += coeff * (part1 + part2)
-                sum += init
-                return sum
-            new_levels[index] = bisection(new_levels[index - 1], new_levels[index + 1], objective2)
-        losses.append(calculate_norm_error(new_levels, means, sigmas, norms, minimum, maximum))
-        # new_levels = new_levels
-        print(new_levels)
+        def arg1_1(j):
+            return mean * (j * mul ** (j - 1) + (j + 1) * mul ** j) \
+                - (2 * j + 1) * mul ** (2 * j)
+        arg1 = np.sum(np.asarray([arg1_1(j) * (
+            grad_dist.cdf(mul ** j) -
+            grad_dist.cdf(mul ** (j+1))) for j in range(0, s)]))
+
+        def arg2_1(j):
+            return j * mul ** (j - 1) + (j + 1) * mul ** j
+        arg2 = np.sum(np.asarray([
+            arg2_1(j) * (grad_dist.pdf(mul ** (j + 1)) -
+                         grad_dist.pdf(mul ** (j))) for j in range(0, s)]))
+
+        gradient = 2 * s * (mul ** (2 * s - 1)) * \
+            (grad_dist.cdf(mul ** s) - grad_dist.cdf(0)) \
+            + arg1 + sigma ** 2 * arg2
+
+        mul = mul - lr * gradient
+        iter += 1
+        all_mul.append(mul)
+
+    return mul, all_mul
+
+
+def alq_sym(initial_levels, grad_dist, epochs):
+    # symmetric alq norm-based
+    positive_levels = initial_levels[len(initial_levels) // 2:]
+    losses = []
+    # Assuming last level is 1, setting first dummy level to 0
+    new_levels = [0] + list(positive_levels).copy()
+    all_levels = [new_levels.copy()]
+    for epoch in range(epochs):
+
+        def objective(x, left_level, right_level):
+            # from equation below corollary 1
+            left_var = grad_dist.est_var_adjacent_levels(left_level, x)
+            right_var = grad_dist.est_var_adjacent_levels(x, right_level)
+            return left_var+right_var
+
+        for index in range(1, len(new_levels)-1):
+            left_level = new_levels[index - 1]
+            right_level = new_levels[index + 1]
+            new_levels[index] = finite_diff_gradient_descent(
+                lambda x: objective(x, left_level, right_level),
+                left_level, right_level, x0=new_levels[index])
+        losses.append(grad_dist.estimate_variance(new_levels))
         all_levels.append(new_levels.copy())
+    # dropping dummy level at 0
+    new_levels = new_levels[1:]
     negative_levels = [-level for level in new_levels]
     negative_levels.reverse()
     new_levels = negative_levels + new_levels
-    print(len(new_levels))
+    return new_levels, all_levels, losses
+
+
+def alq_asym(initial_levels, grad_dist, epochs):
+    # asymmetric alq norm-based
+    # TODO I need to test it
+    losses = []
+    new_levels = list(initial_levels).copy()
+    all_levels = [new_levels.copy()]
+    for epoch in range(epochs):
+        for index in range(1, len(new_levels)-1):
+            left_level = new_levels[index - 1]
+            right_level = new_levels[index + 1]
+            new_levels[index] = grad_dist.estimate_variance_adj_inv(
+                left_level, right_level)
+
+        losses.append(grad_dist.estimate_variance(new_levels))
+        all_levels.append(new_levels.copy())
     return new_levels, all_levels, losses
 
 def get_exp_levels(bits, multiplier):
@@ -216,6 +253,7 @@ def get_exp_levels(bits, multiplier):
                  [])
     return levels
 
+
 def get_exp_levels(bits, multiplier):
     """ exponential (NUQSGD)
 
@@ -235,6 +273,7 @@ def get_exp_levels(bits, multiplier):
                   [multiplier**j for j in reversed(range(num_levels >> 1))]],
                  [])
     return levels
+
 
 class QuantizeMultiBucket(object):
     def __init__(self, method, bits, bucket_size, multiplier, **kwargs):
@@ -258,10 +297,12 @@ class QuantizeMultiBucket(object):
             self.levels = get_uniform_levels(bits)
             self.norm_type = float('inf')
         elif method == 'nuq2':
-            self.levels = get_quantile_levels(bits, 0, 0.1, -self.interval, self.interval)
+            self.levels = get_quantile_levels(
+                bits, 0, 0.1, -self.interval, self.interval)
             self.norm_type = 'fro'
         elif method == 'nuq2inf':
-            self.levels = get_quantile_levels(bits, 0, 0.1, -self.interval, self.interval)
+            self.levels = get_quantile_levels(
+                bits, 0, 0.1, -self.interval, self.interval)
             self.norm_type = float('inf')
         elif method == 'amq':
             self.levels = get_exp_levels(bits, multiplier)
@@ -288,113 +329,100 @@ class QuantizeMultiBucket(object):
 
         self.bucket_size = bucket_size
         self.bits = bits
-        self.co_epochs = kwargs['cd_epochs']
+        self.epochs = kwargs['cd_epochs']
         self.path = kwargs['path']
+        self.symmetric = kwargs['symmetric']
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
         self.mean = 0
         self.variance = 0.1
         self.error = None
-    
-
-    def amq(self, initial_point, learning_rate=0.7, epochs=10000):
-        mean = self.mean
-        sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
-        p = initial_point
-        s = 2 ** (self.bits - 1) - 1 
-        trunc_norm = TruncNorm(mean, sigma, -self.interval, self.interval)
-        i = 0
-        while True:
-            def arg1_1(j):
-                return mean * (j * p ** (j - 1) + (j + 1) * p ** j) - (2 * j + 1) * p ** (2 * j)
-            arg1 = torch.sum(torch.tensor([ arg1_1(j) * (trunc_norm.cdf(p ** j) - trunc_norm.cdf(p ** (j+1))) for j in range(s)]))
-            def arg2_1(j):
-                return j * p ** (j - 1) + (j + 1) * p ** j
-            arg2 = torch.sum(torch.tensor([arg2_1(j) * (trunc_norm.pdf(p ** (j + 1)) - trunc_norm.pdf(p ** (j))) for j in range(s)]))
-            gradient = 2 * s * (p ** (2 * s - 1)) * (trunc_norm.cdf(p ** s) - trunc_norm.cdf(0)) + arg1 + sigma ** 2 * arg2
-            if i == 200:
-                break
-            p = p - learning_rate * gradient
-            i += 1
-        return p
-
-    def amq_norm_based(self, initial_point, learning_rate=0.7, epochs=10000):
-        p = initial_point
-        s = 2 ** (bits - 1) - 1 
-        norms = self.norms['norms']
-        sigmas = self.sigmas['sigmas']
-        means = self.means['means']
-        trunc_norm = CondNormalTrunc(means, sigmas, norms, -self.interval, self.interval)
-        lie = 0
-        all_p = []
-        while True:
-            sum = 0.0
-            for i in range(len(norms)):
-                coeff = norms[i] / trunc_norm.total_norm
-                norm = TruncNorm(means[i], sigmas[i], min, max)
-                def arg1_1(j):
-                    return means[i] * (j * p ** (j - 1) + (j + 1) * p ** j) - (2 * j + 1) * p ** (2 * j)
-                arg1 = np.sum(np.asarray([ arg1_1(j) * (norm.cdf(p ** j) - norm.cdf(p ** (j+1))) for j in range(s)]))
-                def arg2_1(j):
-                    return j * p ** (j - 1) + (j + 1) * p ** j
-                arg2 = np.sum(np.asarray([arg2_1(j) * (norm.pdf(p ** (j + 1)) - norm.pdf(p ** (j))) for j in range(s)]))
-                sum += coeff * (arg1 + sigmas[i] ** 2 * arg2)
-
-            gradient = 2 * s * (p ** (2 * s - 1)) * (trunc_norm.cdf(p ** s) - trunc_norm.cdf(0)) + sum
-            if lie == 200:
-                break
-            p = p - learning_rate * gradient
-            lie += 1
-        return p
 
     def set_mean_variance(self, mean, variance, norms):
         self.mean = mean
         self.variance = variance
         self.norms = norms
         self.number_of_iterations += 1
+        interval = self.interval
         sigma = torch.sqrt(torch.tensor(variance)).cpu().item()
-        half_point = int(len(self.levels) / 2)
-        half_levels = self.levels[half_point:].cpu()
-        self.error = calculate_norm_error(half_levels, self.norms['mean'], self.norms['sigma'], self.norms['norm'], -self.interval, self.interval)
-        if self.method == 'amq':
-            np.savetxt(self.path + '/norms_mean' + str(self.number_of_iterations), np.asarray(self.norms['mean']))
-            np.savetxt(self.path + '/norms_sigma' + str(self.number_of_iterations), np.asarray(self.norms['sigma']))
-            np.savetxt(self.path + '/norms_norm' + str(self.number_of_iterations), np.asarray(self.norms['norm']))
+        self.grad_dist_nb = CondNormalTruncHist(
+            norms['mean'], norms['sigma'], norms['norm'], -interval, interval, nbins=100000, bin_type='linear')
+        self.grad_dist_nl = TruncNorm(
+            mean, sigma, -interval, interval, nbins=100000, bin_type='linear')
 
+        self.error = self.grad_dist_nb.estimate_variance(self.levels.cpu())
+        if self.method == 'amq':
+            np.savetxt(self.path + '/norms_mean' +
+                       str(self.number_of_iterations), np.asarray(self.norms['mean']))
+            np.savetxt(self.path + '/norms_sigma' +
+                       str(self.number_of_iterations), np.asarray(self.norms['sigma']))
+            np.savetxt(self.path + '/norms_norm' +
+                       str(self.number_of_iterations), np.asarray(self.norms['norm']))
 
     def update_levels(self):
         interval = self.interval
         mean = self.mean
         variance = self.variance
+        grad_dist_nl = self.grad_dist_nl
+        grad_dist_nb = self.grad_dist_nb
         sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
-        if self.method == 'nuq2':
-            self.levels = get_quantile_levels(self.bits, mean, sigma, -interval, interval)
+        half_point = int(len(self.levels) / 2)
+        quantile_levels = get_quantile_levels(
+            self.bits, mean, sigma, -interval, interval)
+        uniform_levels = get_uniform_levels(
+            self.bits)
+        exp_levels = get_exp_levels(
+            self.bits, 0.5)
+
+        bits = self.bits
+        if self.method == 'alq':
+            epochs = self.epochs
             initial_levels = self.levels
-            self.levels, all_levels, losses = get_adaptive_levels_co(initial_levels, len(self.levels), mean, sigma, self.co_epochs, -interval, interval)
-        elif self.method == 'alq':
-            self.levels = get_quantile_levels(self.bits, mean, sigma, -interval, interval)
-            half_point = int(len(self.levels) / 2)
+
+            levels_qua, _, losses_qua = alq_sym(quantile_levels, grad_dist_nl, epochs)
+            levels_uniform, _, losses_uni = alq_sym(uniform_levels, grad_dist_nl, epochs)
+            levels_exp, _, losses_exp = alq_sym(exp_levels, grad_dist_nl, epochs)
+            candidate_levels = np.asarray([levels_qua, levels_uniform, levels_exp])
+            candidate_losses = np.asarray([losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+            self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+
+        elif self.method == 'alq_nb':
+            epochs = self.epochs
+            self.levels = get_quantile_levels(
+                self.bits, mean, sigma, -interval, interval)
             initial_levels = self.levels
-            self.levels, all_levels, losses = alq(initial_levels[half_point:], len(self.levels) / 2, mean, sigma, self.co_epochs, -interval, interval)
-        elif self.method =='alq_nb':
-            self.levels = get_uniform_levels(self.bits).tolist()
-            half_point = int(len(self.levels) / 2)
-            initial_levels = self.levels
-            self.levels, all_levels, losses = alq_nb(initial_levels[half_point:], len(self.levels) / 2, self.norms['mean'], self.norms['sigma'], self.norms['norm'], self.co_epochs, -interval, interval)
-            print('Levels are', self.levels)
+            if self.symmetric:
+                qua_levels, all_levels, qua_losses = alq_sym(initial_levels, grad_dist_nb, epochs)
+                levels_qua, _, losses_qua = alq_sym(quantile_levels, grad_dist_nb, epochs)
+                levels_uniform, _, losses_uni = alq_sym(uniform_levels, grad_dist_nb, epochs)
+                levels_exp, _, losses_exp = alq_sym(exp_levels, grad_dist_nb, epochs)
+                candidate_levels = np.asarray([levels_qua, levels_uniform, levels_exp])
+                candidate_losses = np.asarray([losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+                self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+            else: 
+                qua_levels, all_levels, qua_losses = alq_asym(initial_levels, grad_dist_nb, epochs)
+                levels_qua, _, losses_qua = alq_asym(quantile_levels, grad_dist_nb, epochs)
+                levels_uniform, _, losses_uni = alq_asym(uniform_levels, grad_dist_nb, epochs)
+                levels_exp, _, losses_exp = alq_asym(exp_levels, grad_dist_nb, epochs)
+                candidate_levels = np.asarray([levels_qua, levels_uniform, levels_exp])
+                candidate_losses = np.asarray([losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+                self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+
         elif self.method == 'amq':
             initial_points = []
 
             if self.previous_best is None:
                 initial_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 0.9]
             else:
-                initial_points = [0.1, 0.2, 0.3, 0.4, self.previous_best,  0.8, 0.9]
+                initial_points = [0.1, 0.2, 0.3, 0.4,
+                                  self.previous_best,  0.8, 0.9]
             optimal_points = []
             for point in initial_points:
-                optimal_p = self.amq(point)
+                optimal_p, _ = amq_norm_less(point, grad_dist_nl, self.bits)
                 optimal_points.append(optimal_p)
-            half_point = 2 ** (self.bits - 1)
-            optimal_points_costs = [calculate_new_error(get_exp_levels(self.bits, p)[half_point:], mean, sigma, -interval, interval) for p in optimal_points]
+            optimal_points_costs = [
+                grad_dist_nl.estimate_variance(get_exp_levels(self.bits, p)[
+                                                        half_point:]) for p in optimal_points]
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
@@ -406,48 +434,28 @@ class QuantizeMultiBucket(object):
             if self.previous_best is None:
                 initial_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 0.9]
             else:
-                initial_points = [0.1, 0.2, 0.3, 0.4, self.previous_best,  0.8, 0.9]
+                initial_points = [0.1, 0.2, 0.3, 0.4,
+                                  self.previous_best,  0.8, 0.9]
             optimal_points = []
             for point in initial_points:
-                optimal_p = self.amq_norm_based(point)
+                optimal_p, _ = amq_norm_based(point, grad_dist_nb, bits)
                 optimal_points.append(optimal_p)
-            half_point = 2 ** (self.bits - 1)
-            optimal_points_costs = [calculate_new_error(get_exp_levels(self.bits, p)[half_point:], mean, sigma, -interval, interval) for p in optimal_points]
+            optimal_points_costs = [
+                grad_dist_nb.estimate_variance(get_exp_levels(self.bits, p)[
+                                                        half_point:]) for p in optimal_points]
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
             self.levels = get_exp_levels(self.bits, self.multiplier)
-        elif self.method == 'nuq4':
-            self.previous_best = None
-    
-            initial_points = []
-
-            if self.previous_best == None:
-                initial_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 0.9]
-            else:
-                initial_points = [0.1, 0.2, 0.3, 0.4, self.previous_best,  0.8, 0.9]
-            optimal_points = []
-            for point in initial_points:
-                optimal_p = self.amq(point)
-                optimal_points.append(optimal_p)
-            half_point = 2 ** (self.bits - 1)
-            optimal_points_costs = [calculate_new_error(get_exp_levels(self.bits, p)[half_point:], mean, sigma, -interval, interval) for p in optimal_points]
-            index = np.argmin(optimal_points_costs)
-            self.multiplier = optimal_points[index]
-            self.previous_best = self.multiplier
-            self.levels = get_exp_levels(self.bits, self.multiplier)
-            print('Levels are', self.levels)
-
+        
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
-    
 
     def quantize(self, x, number_of_layers):
         if self.method == 'none':
             return x
         assert isinstance(x, torch.cuda.FloatTensor)
         bucket_size = self.bucket_size
-
 
         num_tail = math.ceil(x.numel()/bucket_size)*bucket_size-x.numel()
         xv = torch.cat((x.view(-1),

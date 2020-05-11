@@ -54,7 +54,7 @@ class GradientEstimator(object):
         buckets = {}
         for i in range(iterations):
             grad = grads[i]
-            flattened, flattened_lb = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            flattened, flattened_lb = self.flatten_and_normalize(grad, bucket_size)
             flattened_lb_flt, _ = self.flatten(flattened_lb) 
             flattened_unnormalized, flattened_unnormalized_lb = self.flatten(grad)
             with torch.no_grad():
@@ -100,7 +100,7 @@ class GradientEstimator(object):
 
         for i in range(iterations):
             grad = grads[i]
-            flattened, flattened_lb = self.flatten_and_normalize(grad, self.opt.nuq_bucket_size)
+            flattened, flattened_lb = self.flatten_and_normalize(grad, bucket_size)
 
             flattened_lb_flt, _ = self.flatten(flattened_lb)
 
@@ -124,11 +124,11 @@ class GradientEstimator(object):
             norm_results['norm'].append((buckets[i] / iterations).cpu().item())
             i += 1
 
-        if len(norm_results['mean']) > self.opt.dist_num:
-            indexes = np.argsort(-np.asarray(norm_results['norm']))[:self.opt.dist_num]
-            norm_results['mean'] = np.array(norm_results['mean'])[indexes].tolist()
-            norm_results['sigma'] = np.array(norm_results['sigma'])[indexes].tolist()
-            norm_results['norm'] = np.array(norm_results['norm'])[indexes].tolist()
+        # if len(norm_results['mean']) > self.opt.dist_num:
+        #     indexes = np.argsort(-np.asarray(norm_results['norm']))[:self.opt.dist_num]
+        #     norm_results['mean'] = np.array(norm_results['mean'])[indexes].tolist()
+        #     norm_results['sigma'] = np.array(norm_results['sigma'])[indexes].tolist()
+        #     norm_results['norm'] = np.array(norm_results['norm'])[indexes].tolist()
         total_variance /= (iterations * nw)
         print(norm_results)
 
