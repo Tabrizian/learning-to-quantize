@@ -47,7 +47,7 @@ class GradientEstimator(object):
             i += 1
 
         return stats
-    
+
     def _get_grad_samples(self, model, num_of_samples):
         grads = []
         for i in range(num_of_samples):
@@ -96,18 +96,13 @@ class GradientEstimator(object):
         nuq_layer = self.opt.nuq_layer
         sep_bias_grad = self.opt.sep_bias_grad
 
-        # total number of weights
-        nw = sum([w.numel() for w in grads[0]])
-
-        # total sum of gradients
-        tsum_bias = 0.0
-        tsum_weights = 0.0
-
         buckets_bias = {}
         total_norm_bias = {}
 
         buckets_weights = {}
         total_norm_weights = {}
+
+        samples = len(grads)
 
         fl_norm_bias, fl_norm_weights = self._flatten_sep(grads[0])
         fl_norm_lb_bias, fl_norm_lb_weights = \
@@ -132,10 +127,6 @@ class GradientEstimator(object):
                 self._flatt_and_normalize_lb_sep(grad, bs, nocat=True)
 
             fl_norm_bias, fl_norm_weights = self._flatten_lb_sep(grad, bs)
-            tsum_bias += self._flatten([torch.cat(layer)
-                                        for layer in fl_norm_lb_bias])
-            tsum_weights += self._flatten([torch.cat(layer)
-                                           for layer in fl_norm_lb_weights])
 
             j = 0
             for layer in fl_norm_lb_bias:
@@ -152,13 +143,13 @@ class GradientEstimator(object):
             j = 0
             for layer in fl_norm_bias:
                 for bias in layer:
-                    total_norm_bias[j] += bias.norm()
+                    total_norm_bias[j] += bias.norm() / samples
                     j += 1
 
             j = 0
             for layer in fl_norm_weights:
                 for weight in layer:
-                    total_norm_weights[j] += weight.norm()
+                    total_norm_weights[j] += weight.norm() / samples
                     j += 1
 
         stats_bias = self._calc_stats_buckets(buckets_bias)
@@ -169,216 +160,120 @@ class GradientEstimator(object):
         stats_weights['norm'] = torch.tensor(list(total_norm_weights.values()))
         stats_weights['norm'] = stats_weights['norm'].cpu().tolist()
 
-        return stats_bias, stats_weights
+        stats = {
+            'bias': stats_bias,
+            'weights': stats_weights
+        }
+
+        return stats
 
     def _get_stats_sep(self, grads):
         # get stats for weights and bias separately
         pass
 
-    def _get_stats(self, grads):
-        # get stats
-        bucket_size = self.opt.nuq_bucket_size
+    def _get_stats_nl_lb(self, grads):
+        # get stats normless
+
+        bs = self.opt.nuq_bucket_size
         nuq_layer = self.opt.nuq_layer
-        sep_bias_grad = self.opt.sep_bias_grad
+        samples = len(grads)
+
+        tsum = 0.0
+        tot_var = 0.0
+
+        num_params = len(self._flatt_and_normalize_lb(grads[0], bs))
 
         for grad in grads:
-            flattened, flattened_lb = self.flatten_and_normalize(
-                grad, bucket_size, nocat=True)
+            params = self._flatt_and_normalize_lb(grad, bs)
+            tsum += self._flatten([torch.cat(layer)
+                                   for layer in params])
 
-            flattened_lb_flt, _ = self.flatten(flattened_lb, nocat=True)
-            flatt_unnorm, flattened_unnormalized_lb = self.flatten(grad)
-            with torch.no_grad():
-                if self.opt.nuq_layer == 0:
-                    tsum += flattened_lb_flt
-                else:
-                    tsum += flattened
-            if self.opt.nuq_layer == 1:
-                flatt_unnorm, _ = self.flatten(grad)
-                num_bucket = int(np.ceil(len(flattened) / bucket_size))
-                for bucket_i in range(num_bucket):
-                    start = bucket_i * bucket_size
-                    end = min((bucket_i + 1) * bucket_size, len(flattened))
-                    x_bucket = flattened[start:end].clone()
-                    x_bucket_unnormalized = flatt_unnorm[start:end].clone()
-                    if bucket_i not in buckets_normalized.keys():
-                        buckets_normalized[bucket_i] = []
-                        buckets[bucket_i] = 0
+        mean = tsum / samples
 
-                    buckets_normalized[bucket_i].append(x_bucket)
-                    buckets[bucket_i] += x_bucket_unnormalized.norm()
-            else:
-                bucket_index = 0
-                for layer, flattened in enumerate(flattened_lb):
-                    num_bucket = int(np.ceil(len(flattened) / bucket_size))
-                    for bucket_i in range(num_bucket):
-                        start = bucket_i * bucket_size
-                        end = min((bucket_i + 1) * bucket_size, len(flattened))
-                        x_bucket = flattened[start:end].clone()
-                        x_bucket_unnormalized = flattened_unnormalized_lb[layer][start:end].clone(
-                        )
-                        if i == 0:
-                            buckets_normalized[bucket_index] = []
-                            buckets[bucket_index] = 0
+        for grad in grads:
+            params = self._flatt_and_normalize_lb_sep(grad, bs)
+            tot_var += torch.sum((mean - self._flatten(
+                [torch.cat(layer) for layer in params])) ** 2)
 
-                        buckets_normalized[bucket_index].append(x_bucket)
-                        buckets[bucket_index] += x_bucket_unnormalized.norm()
-                        bucket_index += 1
-        mean = tsum / num_of_samples
-        total_mean = torch.sum(mean) / (nw)
+        tot_mean = tsum / num_params
+        tot_var /= (num_params * samples)
 
-        for i in range(num_of_samples):
-            grad = grads[i]
-            flattened, flattened_lb = self.flatten_and_normalize(
-                grad, bucket_size)
-
-            flattened_lb_flt, _ = self.flatten(flattened_lb)
-
-            with torch.no_grad():
-                if self.opt.nuq_layer == 0:
-                    total_variance += (flattened_lb_flt - mean).pow(2).sum()
-                else:
-                    total_variance += (flattened - mean).pow(2).sum()
-
-        norm_results = {
-            'norm': [],
-            'sigma': [],
-            'mean': []
+        return {
+            'mean': tot_mean,
+            'var': tot_var
         }
 
-        i = 0
-        for bucket in buckets_normalized:
-            current_bk = torch.stack(buckets_normalized[bucket])
-            norm_results['mean'].append(torch.mean(current_bk).cpu().item())
-            norm_results['sigma'].append(torch.sqrt(torch.mean(
-                torch.var(current_bk, dim=0, unbiased=False))).cpu().item())
-            norm_results['norm'].append(
-                (buckets[i] / num_of_samples).cpu().item())
-            i += 1
+    def _get_stats_nl_lb_sep(self, grads):
+        # get normless stats, bias and weights separated
 
-        # if len(norm_results['mean']) > self.opt.dist_num:
-        #     indexes = np.argsort(-np.asarray(norm_results['norm']))[:self.opt.dist_num]
-        #     norm_results['mean'] = np.array(norm_results['mean'])[indexes].tolist()
-        #     norm_results['sigma'] = np.array(norm_results['sigma'])[indexes].tolist()
-        #     norm_results['norm'] = np.array(norm_results['norm'])[indexes].tolist()
-        total_variance /= (num_of_samples * nw)
-        print(norm_results)
+        bs = self.opt.nuq_bucket_size
+        nuq_layer = self.opt.nuq_layer
+        sep_bias_grad = self.opt.sep_bias_grad
+        samples = len(grads)
 
-        return total_mean, total_variance, norm_results
+        tsum_bias = 0.0
+        tot_var_bias = 0.0
+
+        tot_var_weights = 0.0
+        tsum_weights = 0.0
+
+        bias, weights = self._flatt_and_normalize_lb_sep(grads[0], bs)
+        num_bias = len(torch.cat(bias))
+        num_weights = len(torch.cat(weights))
+
+        for grad in grads:
+            bias, weights = self._flatt_and_normalize_lb_sep(grad, bs)
+            tsum_bias += torch.cat(bias)
+            tsum_weights += torch.cat(weights)
+
+        mean_bias = tsum_bias / samples
+        mean_weights = tsum_weights / samples
+
+        for grad in grads:
+            bias, weights = self._flatt_and_normalize_lb_sep(grad, bs)
+            tot_var_bias += torch.sum((mean_bias - torch.cat(bias)) ** 2)
+            tot_var_weights += torch.sum((mean_weights -
+                                          torch.cat(weights)) ** 2)
+
+        tot_mean_bias = torch.sum(mean_bias) / num_bias
+        tot_mean_weights = torch.sum(mean_weights) / num_weights
+
+        tot_var_weights /= (num_weights * samples)
+        tot_var_bias /= (num_bias * samples)
+
+        stats = {
+            'bias': {
+                'sigma': torch.sqrt(tot_var_bias).cpu().item(),
+                'mean': tot_mean_bias.cpu().item()
+            },
+            'weights': {
+                'sigma': torch.sqrt(tot_var_weights).cpu().item(),
+                'mean': tot_mean_weights.cpu().item()
+            }
+        }
+        return stats
+
+    def _get_stats(self, grads):
+        # get stats
+        pass
 
     def snap_online(self, model):
         num_of_samples = self.opt.nuq_number_of_samples
         grads = self._get_grad_samples(model, num_of_samples)
-        return self._get_stats_lb_sep(grads)
-        # total_variance = 0
-        # num_of_samples = self.opt.nuq_number_of_samples
-        # sep_bias_grad = self.opt.sep_bias_grad
 
-        # # total number of weights
-        # nw = sum([w.numel() for w in model.parameters()])
+        lb = True if self.opt.nuq_layer == 0 else False
+        sep = True if self.opt.sep_bias_grad == 1 else False
 
-        # # total sum of weights
-        # tsum = torch.zeros(nw).cuda()
+        # TODO implement variations of lb and sep
 
-        # grads = self._get_grad_samples(num_of_samples)
+        stats = {
+            'nb': self._get_stats_lb_sep(grads),
+            'nl': self._get_stats_nl_lb_sep(grads)
+        }
+        import ipdb
+        ipdb.set_trace()
 
-        # if sep_bias_grad:
-        #     return self._get_stats_sep(grads)
-        # else:
-        #     return self._get_stats(grads)
-
-        # buckets_normalized = {}
-        # buckets = {}
-        # for i in range(num_of_samples):
-        #     grad = grads[i]
-        #     if sep_bias_grad:
-        #         flattened, flattened_lb = self.flatten_and_normalize_sep(
-        #             grad, bucket_size, nocat=True)
-        #     else:
-        #         flattened, flattened_lb = self.flatten_and_normalize(
-        #             grad, bucket_size, nocat=True)
-
-        #     flattened_lb_flt, _ = self.flatten(flattened_lb)
-        #     flatt_unnorm, flattened_unnormalized_lb = self.flatten(
-        #         grad)
-        #     with torch.no_grad():
-        #         if self.opt.nuq_layer == 0:
-        #             tsum += flattened_lb_flt
-        #         else:
-        #             tsum += flattened
-        #     if self.opt.nuq_layer == 1:
-        #         flatt_unnorm, _ = self.flatten(grad)
-        #         num_bucket = int(np.ceil(len(flattened) / bucket_size))
-        #         for bucket_i in range(num_bucket):
-        #             start = bucket_i * bucket_size
-        #             end = min((bucket_i + 1) * bucket_size, len(flattened))
-        #             x_bucket = flattened[start:end].clone()
-        #             x_bucket_unnormalized = flatt_unnorm[start:end].clone()
-        #             if bucket_i not in buckets_normalized.keys():
-        #                 buckets_normalized[bucket_i] = []
-        #                 buckets[bucket_i] = 0
-
-        #             buckets_normalized[bucket_i].append(x_bucket)
-        #             buckets[bucket_i] += x_bucket_unnormalized.norm()
-        #     else:
-        #         bucket_index = 0
-        #         for layer, flattened in enumerate(flattened_lb):
-        #             num_bucket = int(np.ceil(len(flattened) / bucket_size))
-        #             for bucket_i in range(num_bucket):
-        #                 start = bucket_i * bucket_size
-        #                 end = min((bucket_i + 1) * bucket_size, len(flattened))
-        #                 x_bucket = flattened[start:end].clone()
-        #                 x_bucket_unnormalized = flattened_unnormalized_lb[layer][start:end].clone(
-        #                 )
-        #                 if i == 0:
-        #                     buckets_normalized[bucket_index] = []
-        #                     buckets[bucket_index] = 0
-
-        #                 buckets_normalized[bucket_index].append(x_bucket)
-        #                 buckets[bucket_index] += x_bucket_unnormalized.norm()
-        #                 bucket_index += 1
-        # mean = tsum / num_of_samples
-        # total_mean = torch.sum(mean) / (nw)
-
-        # for i in range(num_of_samples):
-        #     grad = grads[i]
-        #     flattened, flattened_lb = self.flatten_and_normalize(
-        #         grad, bucket_size)
-
-        #     flattened_lb_flt, _ = self.flatten(flattened_lb)
-
-        #     with torch.no_grad():
-        #         if self.opt.nuq_layer == 0:
-        #             total_variance += (flattened_lb_flt - mean).pow(2).sum()
-        #         else:
-        #             total_variance += (flattened - mean).pow(2).sum()
-
-        # norm_results = {
-        #     'norm': [],
-        #     'sigma': [],
-        #     'mean': []
-        # }
-
-        # i = 0
-        # for bucket in buckets_normalized:
-        #     current_bk = torch.stack(buckets_normalized[bucket])
-        #     norm_results['mean'].append(torch.mean(current_bk).cpu().item())
-        #     norm_results['sigma'].append(torch.sqrt(torch.mean(
-        #         torch.var(current_bk, dim=0, unbiased=False))).cpu().item())
-        #     norm_results['norm'].append(
-        #         (buckets[i] / num_of_samples).cpu().item())
-        #     i += 1
-
-        # # if len(norm_results['mean']) > self.opt.dist_num:
-        # #     indexes = np.argsort(-np.asarray(norm_results['norm']))[:self.opt.dist_num]
-        # #     norm_results['mean'] = np.array(norm_results['mean'])[indexes].tolist()
-        # #     norm_results['sigma'] = np.array(norm_results['sigma'])[indexes].tolist()
-        # #     norm_results['norm'] = np.array(norm_results['norm'])[indexes].tolist()
-        # total_variance /= (num_of_samples * nw)
-        # print(norm_results)
-
-        # return total_mean, total_variance, norm_results
-
-        # return torch.tensor(0), torch.tensor(0.01), norm_results
+        return stats
 
     def grad(self, model_new, in_place=False, data=None):
         raise NotImplementedError('grad not implemented')
