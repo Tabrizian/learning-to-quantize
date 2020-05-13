@@ -21,17 +21,18 @@ class NUQEstimator(GradientEstimator):
         norms = {}
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
-            flattened_parameters, less_flattened = self.flatten(minibatch_gradient)
+            flattened_parameters = self._flatten(
+                minibatch_gradient)
             num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
             for bucket_i in range(num_bucket):
                 start = bucket_i * bucket_size
-                end = min((bucket_i + 1) * bucket_size, len(flattened_parameters))
+                end = min((bucket_i + 1) * bucket_size,
+                          len(flattened_parameters))
                 x_bucket = flattened_parameters[start:end].clone()
                 if bucket_i not in norms.keys():
                     norms[bucket_i] = []
                 norms[bucket_i].append(x_bucket)
         return norms
-
 
     def grad(self, model_new, in_place=False):
         model = model_new
@@ -55,15 +56,16 @@ class NUQEstimator(GradientEstimator):
             per_layer = False
             with torch.no_grad():
                 if self.opt.nuq_layer == 1:
-                    flattened_array, _ = self.flatten(grad)
-                    gradient_quantized = self.qdq.quantize(flattened_array, layers) / self.ngpu
-                    unflattened_array = self.unflatten(gradient_quantized, grad)
+                    flattened_array = self._flatten(grad)
+                    gradient_quantized = self.qdq.quantize(
+                        flattened_array, layers) / self.ngpu
+                    unflattened_array = self.unflatten(
+                        gradient_quantized, grad)
                     for g, a in zip(unflattened_array, self.acc_grad):
                         a += g
                 else:
                     for g, a in zip(grad, self.acc_grad):
-                        a  += self.qdq.quantize(g, layers) / self.ngpu
-
+                        a += self.qdq.quantize(g, layers) / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
@@ -73,6 +75,7 @@ class NUQEstimator(GradientEstimator):
                     p.grad.copy_(a)
             return loss
         return self.acc_grad
+
 
 class NUQEstimatorMultiGPUParallel(GradientEstimator):
     def __init__(self, *args, **kwargs):
@@ -123,14 +126,18 @@ class NUQEstimatorMultiGPUParallel(GradientEstimator):
                 with torch.cuda.device(i):
                     torch.cuda.synchronize()
                     if self.opt.nuq_layer == 1:
-                        flattened_array, _ = self.flatten(models[i].parameters())
-                        gradient_quantized = self.qdq[i].quantize(flattened_array, layers) / self.ngpu
-                        unflattened_array = self.unflatten(gradient_quantized, models[i].parameters())
+                        flattened_array = self._flatten(
+                            models[i].parameters())
+                        gradient_quantized = self.qdq[i].quantize(
+                            flattened_array, layers) / self.ngpu
+                        unflattened_array = self.unflatten(
+                            gradient_quantized, models[i].parameters())
                         for p, q in zip(models[i].parameters(), unflattened_array):
                             p.grad.copy_(q)
                     else:
                         for p in models[i].parameters():
-                            p.grad.copy_(self.qdq[i].quantize(p.grad, layers) / self.ngpu)
+                            p.grad.copy_(self.qdq[i].quantize(
+                                p.grad, layers) / self.ngpu)
 
         # aggregate grads into gpu0
         for i in range(1, self.ngpu):

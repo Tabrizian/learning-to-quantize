@@ -270,9 +270,58 @@ class GradientEstimator(object):
             'nb': self._get_stats_lb_sep(grads),
             'nl': self._get_stats_nl_lb_sep(grads)
         }
-        import ipdb
-        ipdb.set_trace()
 
+        return stats
+
+    def snap_online_mean(self, model):
+
+        stats_nb = {
+            'means': [],
+            'sigmas': [],
+            'norms': []
+        }
+
+        total_variance = 0.0
+        tot_sum = 0.0
+
+        num_of_samples = self.opt.nuq_number_of_samples
+        bs = self.opt.nuq_bucket_size
+
+        for i in range(num_of_samples):
+            grad = self.grad_estim(model)
+            flattened = self._flatten_lb(grad)
+            for layer in flattened:
+                num_buckets = int(np.ceil(len(layer) / bs))
+                for bucket in range(num_buckets):
+                    start = bucket * bs
+                    end = min((bucket + 1) * bs, len(layer))
+                    current_bk = layer[start:end]
+                    norm = current_bk.norm()
+                    b_len = len(current_bk)
+                    var = torch.var(current_bk)
+
+                    # update norm-less variance
+                    total_variance += var * (b_len - 1)
+                    tot_sum += torch.sum(current_bk)
+
+                    # update norm-based stats
+                    stats_nb['norms'].append(norm)
+                    stats_nb['sigmas'].append(
+                        torch.sqrt(var))
+                    stats_nb['means'].append(torch.mean(current_bk))
+
+        nw = sum([w.numel() for w in model.parameters()])
+        stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()
+        stats_nb['sigmas'] = torch.stack(stats_nb['sigmas']).cpu().tolist()
+        stats_nb['norms'] = torch.stack(stats_nb['norms']).cpu().tolist()
+
+        stats = {
+            'nb': stats_nb,
+            'nl': {
+                'mean': (tot_sum / nw).cpu().item(),
+                'sigma': torch.sqrt(total_variance / nw).cpu().item(),
+            }
+        }
         return stats
 
     def grad(self, model_new, in_place=False, data=None):
@@ -452,7 +501,9 @@ class GradientEstimator(object):
         model: Model to be evaluated
         """
         bucket_size = self.opt.nuq_bucket_size
-        mean_estimates_normalized, mean_estimates_unconcatenated = self.flatten_and_normalize(
+        mean_estimates_normalized = self._flatt_and_normalize(
+            model.parameters(), bucket_size)
+        mean_estimates_unconcatenated = self._flatt_and_normalize_lb(
             model.parameters(), bucket_size)
         # estimate grad mean and variance
         mean_estimates = [torch.zeros_like(g) for g in model.parameters()]
@@ -462,7 +513,9 @@ class GradientEstimator(object):
 
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
-            minibatch_gradient_normalized, minibatch_gradient_unconcatenated = self.flatten_and_normalize(
+            minibatch_gradient_normalized = self._flatt_and_normalize(
+                minibatch_gradient, bucket_size)
+            minibatch_gradient_unconcatenated = self._flatt_and_normalize_lb(
                 minibatch_gradient, bucket_size)
 
             for e, g in zip(mean_estimates, minibatch_gradient):
@@ -495,7 +548,9 @@ class GradientEstimator(object):
 
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
-            minibatch_gradient_normalized, minibatch_gradient_unconcatenated = self.flatten_and_normalize(
+            minibatch_gradient_normalized = self._flatt_and_normalize(
+                minibatch_gradient, bucket_size)
+            minibatch_gradient_unconcatenated = self._flatt_and_normalize_lb(
                 minibatch_gradient, bucket_size)
 
             v = [(gg - ee).pow(2)
@@ -562,7 +617,7 @@ class GradientEstimator(object):
         norms = {}
         for i in range(gviter):
             minibatch_gradient = self.grad_estim(model)
-            flattened_parameters, less_flattened = self.flatten(
+            flattened_parameters = self._flatten(
                 minibatch_gradient)
             num_bucket = int(np.ceil(len(flattened_parameters) / bucket_size))
             for bucket_i in range(num_bucket):

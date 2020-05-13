@@ -111,6 +111,7 @@ def bisection(begin, end, f):
         return bisection(x, end, f)
     return bisection(begin, x, f)
 
+
 def amq_norm_based(initial_point, grad_dist, bits, lr=0.1, epochs=200):
     mul = initial_point
     s = 2 ** (bits - 1) - 1
@@ -206,7 +207,13 @@ def alq_sym(initial_levels, grad_dist, epochs):
             new_levels[index] = finite_diff_gradient_descent(
                 lambda x: objective(x, left_level, right_level),
                 left_level, right_level, x0=new_levels[index])
-        losses.append(grad_dist.estimate_variance(new_levels))
+            assert new_levels[index] < right_level and \
+                new_levels[index] > left_level, \
+                "New level is not in the interval"
+        negative_levels = [-level for level in new_levels]
+        negative_levels.reverse()
+        losses.append(grad_dist.estimate_variance(
+            negative_levels[:-1] + new_levels[1:]))
         all_levels.append(new_levels.copy())
     # dropping dummy level at 0
     new_levels = new_levels[1:]
@@ -228,10 +235,13 @@ def alq_asym(initial_levels, grad_dist, epochs):
             right_level = new_levels[index + 1]
             new_levels[index] = grad_dist.estimate_variance_adj_inv(
                 left_level, right_level)
+            assert new_levels[index] < right_level and \
+                new_levels[index] > left_level
 
         losses.append(grad_dist.estimate_variance(new_levels))
         all_levels.append(new_levels.copy())
     return new_levels, all_levels, losses
+
 
 def get_exp_levels(bits, multiplier):
     """ exponential (NUQSGD)
@@ -334,30 +344,31 @@ class QuantizeMultiBucket(object):
         self.symmetric = kwargs['symmetric']
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
-        self.mean = 0
-        self.variance = 0.1
+        self.mean_weights = 0
+        self.variance_weights = 0.1
         self.error = None
 
-    def set_mean_variance(self, mean, variance, norms):
-        self.mean = mean
-        self.variance = variance
-        self.norms = norms
+    def set_mean_variance(self, stats):
+        self.mean = mean = stats['nl']['mean']
+        self.variance = variance = stats['nl']['sigma'] ** 2
+        self.norms = norms = stats['nb']
         self.number_of_iterations += 1
         interval = self.interval
-        sigma = torch.sqrt(torch.tensor(variance)).cpu().item()
+        sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
         self.grad_dist_nb = CondNormalTruncHist(
-            norms['mean'], norms['sigma'], norms['norm'], -interval, interval, nbins=100000, bin_type='linear')
+            norms['means'], norms['sigmas'], norms['norms'], -interval,
+            interval, nbins=100000, bin_type='linear')
         self.grad_dist_nl = TruncNorm(
             mean, sigma, -interval, interval, nbins=100000, bin_type='linear')
 
         self.error = self.grad_dist_nb.estimate_variance(self.levels.cpu())
         if self.method == 'amq':
             np.savetxt(self.path + '/norms_mean' +
-                       str(self.number_of_iterations), np.asarray(self.norms['mean']))
+                       str(self.number_of_iterations), np.asarray(self.norms['means']))
             np.savetxt(self.path + '/norms_sigma' +
-                       str(self.number_of_iterations), np.asarray(self.norms['sigma']))
+                       str(self.number_of_iterations), np.asarray(self.norms['sigmas']))
             np.savetxt(self.path + '/norms_norm' +
-                       str(self.number_of_iterations), np.asarray(self.norms['norm']))
+                       str(self.number_of_iterations), np.asarray(self.norms['norms']))
 
     def update_levels(self):
         interval = self.interval
@@ -379,11 +390,16 @@ class QuantizeMultiBucket(object):
             epochs = self.epochs
             initial_levels = self.levels
 
-            levels_qua, _, losses_qua = alq_sym(quantile_levels, grad_dist_nl, epochs)
-            levels_uniform, _, losses_uni = alq_sym(uniform_levels, grad_dist_nl, epochs)
-            levels_exp, _, losses_exp = alq_sym(exp_levels, grad_dist_nl, epochs)
-            candidate_levels = np.asarray([levels_qua, levels_uniform, levels_exp])
-            candidate_losses = np.asarray([losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+            levels_qua, _, losses_qua = alq_sym(
+                quantile_levels, grad_dist_nl, epochs)
+            levels_uniform, _, losses_uni = alq_sym(
+                uniform_levels, grad_dist_nl, epochs)
+            levels_exp, _, losses_exp = alq_sym(
+                exp_levels, grad_dist_nl, epochs)
+            candidate_levels = np.asarray(
+                [levels_qua, levels_uniform, levels_exp])
+            candidate_losses = np.asarray(
+                [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
             self.levels = candidate_levels[np.argsort(candidate_losses)][0]
 
         elif self.method == 'alq_nb':
@@ -392,20 +408,32 @@ class QuantizeMultiBucket(object):
                 self.bits, mean, sigma, -interval, interval)
             initial_levels = self.levels
             if self.symmetric:
-                qua_levels, all_levels, qua_losses = alq_sym(initial_levels, grad_dist_nb, epochs)
-                levels_qua, _, losses_qua = alq_sym(quantile_levels, grad_dist_nb, epochs)
-                levels_uniform, _, losses_uni = alq_sym(uniform_levels, grad_dist_nb, epochs)
-                levels_exp, _, losses_exp = alq_sym(exp_levels, grad_dist_nb, epochs)
-                candidate_levels = np.asarray([levels_qua, levels_uniform, levels_exp])
-                candidate_losses = np.asarray([losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+                qua_levels, all_levels, qua_losses = alq_sym(
+                    initial_levels, grad_dist_nb, epochs)
+                levels_qua, _, losses_qua = alq_sym(
+                    quantile_levels, grad_dist_nb, epochs)
+                levels_uniform, _, losses_uni = alq_sym(
+                    uniform_levels, grad_dist_nb, epochs)
+                levels_exp, _, losses_exp = alq_sym(
+                    exp_levels, grad_dist_nb, epochs)
+                candidate_levels = np.asarray(
+                    [levels_qua, levels_uniform, levels_exp])
+                candidate_losses = np.asarray(
+                    [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
                 self.levels = candidate_levels[np.argsort(candidate_losses)][0]
-            else: 
-                qua_levels, all_levels, qua_losses = alq_asym(initial_levels, grad_dist_nb, epochs)
-                levels_qua, _, losses_qua = alq_asym(quantile_levels, grad_dist_nb, epochs)
-                levels_uniform, _, losses_uni = alq_asym(uniform_levels, grad_dist_nb, epochs)
-                levels_exp, _, losses_exp = alq_asym(exp_levels, grad_dist_nb, epochs)
-                candidate_levels = np.asarray([levels_qua, levels_uniform, levels_exp])
-                candidate_losses = np.asarray([losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+            else:
+                qua_levels, all_levels, qua_losses = alq_asym(
+                    initial_levels, grad_dist_nb, epochs)
+                levels_qua, _, losses_qua = alq_asym(
+                    quantile_levels, grad_dist_nb, epochs)
+                levels_uniform, _, losses_uni = alq_asym(
+                    uniform_levels, grad_dist_nb, epochs)
+                levels_exp, _, losses_exp = alq_asym(
+                    exp_levels, grad_dist_nb, epochs)
+                candidate_levels = np.asarray(
+                    [levels_qua, levels_uniform, levels_exp])
+                candidate_losses = np.asarray(
+                    [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
                 self.levels = candidate_levels[np.argsort(candidate_losses)][0]
 
         elif self.method == 'amq':
@@ -422,7 +450,7 @@ class QuantizeMultiBucket(object):
                 optimal_points.append(optimal_p)
             optimal_points_costs = [
                 grad_dist_nl.estimate_variance(get_exp_levels(self.bits, p)[
-                                                        half_point:]) for p in optimal_points]
+                    half_point:]) for p in optimal_points]
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
@@ -442,12 +470,12 @@ class QuantizeMultiBucket(object):
                 optimal_points.append(optimal_p)
             optimal_points_costs = [
                 grad_dist_nb.estimate_variance(get_exp_levels(self.bits, p)[
-                                                        half_point:]) for p in optimal_points]
+                    half_point:]) for p in optimal_points]
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
             self.levels = get_exp_levels(self.bits, self.multiplier)
-        
+
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
 

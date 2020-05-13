@@ -53,12 +53,12 @@ class OptimizerFactory(object):
             print(self.niters)
 
             if opt.g_estim == 'nuq' and opt.nuq_method != 'none':
-                mean, variance, norms = gvar.gest.snap_online(model)
+                stats = gvar.gest.snap_online_mean(model)
                 if opt.nuq_parallel == 'ngpu':
                     for qdq in gvar.gest.qdq:
-                        qdq.set_mean_variance(mean.cpu().item(), variance.cpu().item(), norms)
+                        qdq.set_mean_variance(stats)
                 else:
-                    gvar.gest.qdq.set_mean_variance(mean.cpu().item(), variance.cpu().item(), norms)
+                    gvar.gest.qdq.set_mean_variance(stats)
 
             if opt.nuq_method == 'amq' or opt.nuq_method =='nuq4' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
                 if opt.nuq_parallel == 'ngpu':
