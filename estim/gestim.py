@@ -298,7 +298,7 @@ class GradientEstimator(object):
                     current_bk = layer[start:end]
                     norm = current_bk.norm()
                     b_len = len(current_bk)
-                    var = torch.var(current_bk)
+                    var = torch.var(current_bk / norm)
 
                     # update norm-less variance
                     total_variance += var * (b_len - 1)
@@ -308,7 +308,7 @@ class GradientEstimator(object):
                     stats_nb['norms'].append(norm)
                     stats_nb['sigmas'].append(
                         torch.sqrt(var))
-                    stats_nb['means'].append(torch.mean(current_bk))
+                    stats_nb['means'].append(torch.mean(current_bk / norm))
 
         nw = sum([w.numel() for w in model.parameters()])
         stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()
