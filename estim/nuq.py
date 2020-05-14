@@ -4,6 +4,7 @@ import torch.multiprocessing
 import numpy as np
 import copy
 
+import math
 from args import opt_to_nuq_kwargs
 from .gestim import GradientEstimator
 from nuq.quantize import QuantizeMultiBucket
@@ -65,10 +66,22 @@ class NUQEstimator(GradientEstimator):
                         a += g
                 else:
                     for g, a in zip(grad, self.acc_grad):
-                        if g.view(-1).size()[0] >= self.opt.nuq_bucket_size:
-                            a += self.qdq.quantize(g, layers) / self.ngpu
+                        bs = self.opt.nuq_bucket_size
+                        num_tail = math.ceil(g.numel() / bs) * bs - g.numel()
+                        xv = torch.cat(
+                            (g.view(-1), torch.zeros(num_tail, dtype=g.dtype, device=g.device)))
+                        xv = xv.view(-1, bs)
+
+                        # if the bucket is undersized
+                        if num_tail > 0 and xv.size()[0] > 1:
+                            quantized = self.qdq.quantize(xv[:-1].view(-1))
+                            # remove the zeros and create the flattened
+                            # and quantized version of the gradient
+                            quantized = torch.cat(
+                                [quantized, xv[-1][:num_tail]])
+                            a += self.unflatten(quantized, g)
                         else:
-                            a += g / self.ngpu
+                            a += self.qdq.quantize(g)
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
