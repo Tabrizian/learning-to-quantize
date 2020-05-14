@@ -454,7 +454,7 @@ class GradientEstimator(object):
 
         return torch.cat(flatt_params)
 
-    def unflatten(self, gradient, parameters):
+    def unflatten(self, gradient, parameters, tensor=False):
         shaped_gradient = []
         begin = 0
         for layer in parameters:
@@ -462,7 +462,10 @@ class GradientEstimator(object):
             shaped_gradient.append(
                 gradient[begin:begin+size].view(layer.shape))
             begin += size
-        return shaped_gradient
+        if tensor:
+            return torch.stack(shaped_gradient)
+        else:
+            return shaped_gradient
 
     def _flatt_and_normalize_lb_sep(self, gradient, bucket_size=1024,
                                     nocat=False):

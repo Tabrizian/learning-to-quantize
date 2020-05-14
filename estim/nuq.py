@@ -79,7 +79,7 @@ class NUQEstimator(GradientEstimator):
                             # and quantized version of the gradient
                             quantized = torch.cat(
                                 [quantized, xv[-1][:num_tail]])
-                            a += self.unflatten(quantized, g)
+                            a += self.unflatten(quantized, g, True)
                         else:
                             a += self.qdq.quantize(g)
 
