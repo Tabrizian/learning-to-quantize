@@ -65,7 +65,10 @@ class NUQEstimator(GradientEstimator):
                         a += g
                 else:
                     for g, a in zip(grad, self.acc_grad):
-                        a += self.qdq.quantize(g, layers) / self.ngpu
+                        if len(g.size()) != 1:
+                            a += self.qdq.quantize(g, layers) / self.ngpu
+                        else:
+                            a += g / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):

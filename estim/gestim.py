@@ -285,31 +285,36 @@ class GradientEstimator(object):
         tot_sum = 0.0
 
         num_of_samples = self.opt.nuq_number_of_samples
+        total_params = 0
         bs = self.opt.nuq_bucket_size
+
+        params = list(model.parameters())
 
         for i in range(num_of_samples):
             grad = self.grad_estim(model)
             flattened = self._flatten_lb(grad)
-            for layer in flattened:
-                num_buckets = int(np.ceil(len(layer) / bs))
-                for bucket in range(num_buckets):
-                    start = bucket * bs
-                    end = min((bucket + 1) * bs, len(layer))
-                    current_bk = layer[start:end]
-                    norm = current_bk.norm()
-                    current_bk = current_bk / norm
-                    b_len = len(current_bk)
-                    var = torch.var(current_bk)
+            for i, layer in enumerate(flattened):
+                if len(params[i].size()) != 1:
+                    num_buckets = int(np.ceil(len(layer) / bs))
+                    for bucket in range(num_buckets):
+                        start = bucket * bs
+                        end = min((bucket + 1) * bs, len(layer))
+                        current_bk = layer[start:end]
+                        norm = current_bk.norm()
+                        current_bk = current_bk / norm
+                        b_len = len(current_bk)
+                        total_params += b_len
+                        var = torch.var(current_bk)
 
-                    # update norm-less variance
-                    total_variance += var * (b_len - 1)
-                    tot_sum += torch.sum(current_bk)
+                        # update norm-less variance
+                        total_variance += var * (b_len - 1)
+                        tot_sum += torch.sum(current_bk)
 
-                    # update norm-based stats
-                    stats_nb['norms'].append(norm)
-                    stats_nb['sigmas'].append(
-                        torch.sqrt(var))
-                    stats_nb['means'].append(torch.mean(current_bk))
+                        # update norm-based stats
+                        stats_nb['norms'].append(norm)
+                        stats_nb['sigmas'].append(
+                            torch.sqrt(var))
+                        stats_nb['means'].append(torch.mean(current_bk))
 
         nw = sum([w.numel() for w in model.parameters()])
         stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()
@@ -319,8 +324,8 @@ class GradientEstimator(object):
         stats = {
             'nb': stats_nb,
             'nl': {
-                'mean': (tot_sum / nw).cpu().item(),
-                'sigma': torch.sqrt(total_variance / nw).cpu().item(),
+                'mean': (tot_sum / total_params).cpu().item(),
+                'sigma': torch.sqrt(total_variance / total_params).cpu().item(),
             }
         }
         return stats

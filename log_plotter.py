@@ -1,4 +1,4 @@
-from scipy.interpolate import spline
+from scipy import interpolate
 import numpy as np
 import os
 import re
@@ -35,7 +35,10 @@ def get_data_pth(logdir, run_names, tag_names, batch_size=None):
 
 def plot_smooth(x, y, npts=100, order=3, *args, **kwargs):
     x_smooth = np.linspace(x.min(), x.max(), npts)
-    y_smooth = spline(x, y, x_smooth, order=order)
+    tck = interpolate.splrep(x, y, s=0)
+    y_smooth = interpolate.splev(x_smooth, tck, der=0)
+    # y_smooth = spline(x, y, x_smooth, order=order)
+
     # x_smooth = x
     # y_smooth = y
     plt.plot(x_smooth, y_smooth, *args, **kwargs)
@@ -72,6 +75,7 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
               'grad_bias': 'Gradient Diff norm',
               'est_var': 'Mean variance',
               'est_snr': 'Mean SNR',
+              'nb_error': 'NB Error',
               'est_nvar': 'Mean Normalized Variance'}
     titles = {'Tacc': 'Training Accuracy', 'Terror': 'Training Error',
               'train/accuracy': 'Training Accuracy',
@@ -81,11 +85,12 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
               'Tloss': 'Loss on full training set', 'lr': 'Learning rate',
               'Vloss': 'Loss on validation set',
               'grad_bias': 'Optimization Step Bias',
+              'nb_error': 'Norm-based Variance Error',
               'est_var': 'Optimization Step Variance (w/o learning rate)',
               'est_snr': 'Optimization Step SNR',
               'est_nvar': 'Optimization Step Normalized Variance (w/o lr)',
               }
-    yscale_log = ['Tloss', 'Vloss']  # , 'est_var'
+    yscale_log = ['Tloss', 'Vloss', 'est_var']  # , 'est_var'
     yscale_base = []
     # yscale_sci = ['est_bias', 'est_var']
     plot_fs = {'Tacc': plot_f, 'Vacc': plot_f,
