@@ -65,7 +65,7 @@ class NUQEstimator(GradientEstimator):
                         a += g
                 else:
                     for g, a in zip(grad, self.acc_grad):
-                        if len(g.size()) != 1:
+                        if g.view(-1).size()[0] >= self.opt.nuq_bucket_size:
                             a += self.qdq.quantize(g, layers) / self.ngpu
                         else:
                             a += g / self.ngpu

@@ -294,7 +294,7 @@ class GradientEstimator(object):
             grad = self.grad_estim(model)
             flattened = self._flatten_lb(grad)
             for i, layer in enumerate(flattened):
-                if len(params[i].size()) != 1:
+                if params[i].view(-1).size()[0] >= bs:
                     num_buckets = int(np.ceil(len(layer) / bs))
                     for bucket in range(num_buckets):
                         start = bucket * bs
