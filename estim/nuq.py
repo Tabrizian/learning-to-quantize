@@ -78,10 +78,10 @@ class NUQEstimator(GradientEstimator):
                             # remove the zeros and create the flattened
                             # and quantized version of the gradient
                             quantized = torch.cat(
-                                [quantized, xv[-1][:num_tail]])
-                            a += self.unflatten(quantized, g, True)
+                                [quantized, xv[-1][:-num_tail]])
+                            a += self.unflatten(quantized, g, True) / self.ngpu
                         else:
-                            a += self.qdq.quantize(g)
+                            a += self.qdq.quantize(g) / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
