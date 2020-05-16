@@ -29,8 +29,8 @@ def slurm(sargs, prefix):
     njobs, ntasks, partition = sargs.split(',', 2)
     njobs = int(njobs)
     ntasks = int(ntasks)
-    #njobs = 5  # Number of array jobs
-    #ntasks = 4  # Number of running jobs
+    # njobs = 5  # Number of array jobs
+    # ntasks = 4  # Number of running jobs
     partition = 'gpu'
     jobs = [str(i) for i in range(njobs)]
     sbatch_f = """#!/bin/bash
@@ -54,7 +54,7 @@ python -c "import torch; print(torch.__version__)"
 source $HOME/Code/nuqsgd/nuqsgd.sh
 bash jobs/{prefix}_$SLURM_ARRAY_TASK_ID.sh
 """.format(njobs=njobs-1, ntasks=ntasks, partition=partition, prefix=prefix)
-    with open('jobs/'+ prefix +'_slurm.sbatch', 'w') as f:
+    with open('jobs/' + prefix + '_slurm.sbatch', 'w') as f:
         print(sbatch_f, file=f)
     parallel = True  # each script runs in parallel
     return jobs, parallel

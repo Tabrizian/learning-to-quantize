@@ -197,7 +197,7 @@ def cifar10_full(args):
     shared_args = [('dataset', dataset),
                    ('optim', ['sgd']),  # 'sgd', 'adam'
                    # ('arch', 'resnet32'),
-                   ('arch', ['resnet8']),
+                   ('arch', ['resnet32']),
                    ('batch_size', 128),
                    ('lr', [0.1]),
                    ('momentum', 0.9),
@@ -222,7 +222,7 @@ def cifar10_full(args):
         # ('gvar_estim_iter', 10),
         ('gvar_log_iter', 100),  # 100
         ('gvar_start', 0),
-        ('g_osnap_iter', [2000]),
+        ('g_osnap_iter', 1000),
         ('g_bsnap_iter', 10000),
         # ('g_optim', ''),
         # ('g_optim_start', 0),
@@ -231,10 +231,10 @@ def cifar10_full(args):
 
     args_super_sgd = [
         ('g_estim', ['nuq']),
-        ('nuq_bits', 4),
+        ('nuq_bits', [3]),
         ('nuq_bucket_size', [8192]),
         ('nuq_ngpu', 4),  # 2
-        ('dist_num', [20]),
+        ('dist_num', [50]),
         ('nuq_layer', ''),
         ('nuq_ig_sm_bkts', ''),
         ('nuq_truncated_interval', 1),

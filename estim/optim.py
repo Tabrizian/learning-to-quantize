@@ -9,7 +9,7 @@ from estim.gvar import MinVarianceGradient
 
 class OptimizerFactory(object):
 
-    def __init__(self, model, train_loader, tb_logger, simple_logger, opt):
+    def __init__(self, model, train_loader, tb_logger, opt):
         self.model = model
         self.opt = opt
         self.niters = 0
@@ -19,7 +19,8 @@ class OptimizerFactory(object):
         self.param_groups = None
         self.gest_used = False
         minvar_loader = get_minvar_loader(train_loader, opt)
-        self.gvar = MinVarianceGradient(model, minvar_loader, opt, tb_logger, simple_logger)
+        self.gvar = MinVarianceGradient(
+            model, minvar_loader, opt, tb_logger)
         self.reset()
 
     def reset(self):
@@ -46,9 +47,9 @@ class OptimizerFactory(object):
         model = self.model
 
         self.optimizer.zero_grad()
-        
+
         # Frequent snaps
-        if ((self.niters - opt.gvar_start) % opt.g_osnap_iter == 0
+        if ((self.niters - opt.gvar_start) % opt.g_osnap_iter == 0 or self.niters == 100
                 and self.niters >= opt.gvar_start):
             print(self.niters)
 
@@ -60,18 +61,18 @@ class OptimizerFactory(object):
                 else:
                     gvar.gest.qdq.set_mean_variance(stats)
 
-            if opt.nuq_method == 'amq' or opt.nuq_method =='nuq4' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
+            if opt.nuq_method == 'amq' or opt.nuq_method == 'nuq4' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
                 if opt.nuq_parallel == 'ngpu':
                     for qdq in gvar.gest.qdq:
                         qdq.update_levels()
                 else:
                     gvar.gest.qdq.update_levels()
-               
+
         if ((self.niters - opt.gvar_start) % opt.g_bsnap_iter == 0
                 and self.niters > opt.gvar_start):
             print(self.niters)
             if opt.nuq_method == 'nuq4':
-                   gvar.gest.qdq.bits += 1
+                gvar.gest.qdq.bits += 1
 
         pg_used = gvar.gest_used
         loss = gvar.grad(self.niters)
@@ -85,4 +86,3 @@ class OptimizerFactory(object):
 
         profiler.end()
         return loss
-    

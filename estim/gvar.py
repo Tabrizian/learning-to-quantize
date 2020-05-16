@@ -11,7 +11,7 @@ from estim.nuq import NUQEstimatorMultiGPUParallel
 
 
 class MinVarianceGradient(object):
-    def __init__(self, model, data_loader, opt, tb_logger, simple_logger):
+    def __init__(self, model, data_loader, opt, tb_logger):
         self.model = model
         sgd = SGDEstimator(data_loader, opt, tb_logger)
         if opt.g_estim == 'sgd':
@@ -33,7 +33,6 @@ class MinVarianceGradient(object):
         self.Esgd = 0
         self.last_log_iter = 0
         self.opt = opt
-        self.writer = simple_logger
 
     def is_log_iter(self, niters):
         opt = self.opt
@@ -72,7 +71,6 @@ class MinVarianceGradient(object):
 
     def log_var(self, model, niters):
         tb_logger = self.tb_logger
-        writer = self.writer
         gviter = self.opt.gvar_estim_iter
         Ege, var_e, snr_e, nv_e = self.gest.get_Ege_var(model, gviter)
         Esgd, var_s, snr_s, nv_s = self.sgd.get_Ege_var(model, gviter)

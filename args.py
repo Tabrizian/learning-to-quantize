@@ -68,8 +68,8 @@ def add_args():
                         default=argparse.SUPPRESS, action='store_true')
     parser.add_argument('--data_aug',
                         default=argparse.SUPPRESS, action='store_true')
-    parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('--noresume', action='store_true',
+                        help='do not resume from checkpoint')
     parser.add_argument('--pretrained',
                         default=argparse.SUPPRESS, action='store_true')
     parser.add_argument('--num_class',
@@ -79,7 +79,7 @@ def add_args():
     parser.add_argument('--nesterov',
                         default=argparse.SUPPRESS, action='store_true')
     parser.add_argument('--run_dir', default='runs/runX')
-    parser.add_argument('--ckpt_name', default='model_best.pth.tar')
+    parser.add_argument('--ckpt_name', default='checkpoint.pth.tar')
     parser.add_argument('--g_estim', default=argparse.SUPPRESS, type=str)
     parser.add_argument('--epoch_iters',
                         default=argparse.SUPPRESS, type=int)
@@ -117,6 +117,7 @@ def add_args():
     parser.add_argument('--nuq_sym', default=False, action='store_true')
     parser.add_argument('--nuq_parallel', default='no', help='no|gpu1|ngpu')
     parser.add_argument('--dist_num', default=20, type=int)
+    parser.add_argument('--chkpt_iter', default=20, type=int)
     parser.add_argument('--nuq_number_of_samples',
                         default=argparse.SUPPRESS,
                         type=int,

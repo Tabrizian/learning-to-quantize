@@ -24,7 +24,7 @@ class SaveCheckpoint(object):
         is_best = prec1 > self.best_prec1
         self.best_prec1 = max(prec1, self.best_prec1)
         state = {
-            'epoch': optimizer.epoch + 1,
+            'epoch': optimizer.epoch,
             'niters': optimizer.niters,
             'opt': opt.d,
             'model': model.state_dict(),

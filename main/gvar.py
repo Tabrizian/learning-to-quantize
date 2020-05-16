@@ -62,8 +62,9 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
     batch_time = Profiler()
     model.train()
     profiler = Profiler()
+    init_iters = optimizer.niters
     optimizer.logger.reset()
-    for batch_idx in range(opt.epoch_iters):
+    for batch_idx in range(init_iters, opt.epoch_iters):
         profiler.start()
         # sgd step
         loss = optimizer.step(profiler)
@@ -107,6 +108,7 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
                 test(tb_logger,
                      model, train_test_loader, opt, optimizer.niters,
                      'Train', 'T')
+        if optimizer.niters % opt.chkpt_iter == 0:
             prec1 = test(tb_logger,
                          model, test_loader, opt, optimizer.niters)
             save_checkpoint(model, float(prec1), opt, optimizer,
@@ -134,7 +136,6 @@ def untrain(model, gvar, opt):
 def main():
     opt = get_opt()
     tb_logger.configure(opt.logger_name, flush_secs=5, opt=opt)
-    simple_logger = SummaryWriter('my_dir/' + opt.logger_name)
     logfname = os.path.join(opt.logger_name, 'log.txt')
     logging.basicConfig(
         filename=logfname,
@@ -164,23 +165,22 @@ def main():
 
     model = models.init_model(opt)
 
-    optimizer = OptimizerFactory(model, train_loader, tb_logger, simple_logger, opt)
+    optimizer = OptimizerFactory(model, train_loader, tb_logger, opt)
     epoch = 0
     save_checkpoint = utils.SaveCheckpoint()
 
     # optionally resume from a checkpoint
-    model_path = os.path.join(opt.resume, opt.ckpt_name)
-    if opt.resume != '':
+    if not opt.noresume:
+        model_path = os.path.join(opt.logger_name, opt.ckpt_name)
         if os.path.isfile(model_path):
             print("=> loading checkpoint '{}'".format(model_path))
             checkpoint = torch.load(model_path)
             best_prec1 = checkpoint['best_prec1']
-            if opt.g_resume:
-                optimizer.gvar.load_state_dict(checkpoint['gvar'])
-            else:
-                epoch = checkpoint['epoch']
-                model.load_state_dict(checkpoint['model'])
-                save_checkpoint.best_prec1 = best_prec1
+            optimizer.gvar.load_state_dict(checkpoint['gvar'])
+            optimizer.niters = checkpoint['niters']
+            epoch = checkpoint['epoch']
+            model.load_state_dict(checkpoint['model'])
+            save_checkpoint.best_prec1 = best_prec1
             print("=> loaded checkpoint '{}' (epoch {}, best_prec {})"
                   .format(model_path, epoch, best_prec1))
         else:

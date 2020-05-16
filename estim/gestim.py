@@ -354,12 +354,20 @@ class GradientEstimator(object):
         stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()
         stats_nb['sigmas'] = torch.stack(stats_nb['sigmas']).cpu().tolist()
         stats_nb['norms'] = torch.stack(stats_nb['norms']).cpu().tolist()
+        if len(stats_nb['means']) > self.opt.dist_num:
+            indexes = np.argsort(-np.asarray(stats_nb['norms']))[
+                :self.opt.dist_num]
+            stats_nb['means'] = np.array(stats_nb['means'])[indexes].tolist()
+            stats_nb['sigmas'] = np.array(stats_nb['sigmas'])[
+                indexes].tolist()
+            stats_nb['norms'] = np.array(stats_nb['norms'])[indexes].tolist()
 
         stats = {
             'nb': stats_nb,
             'nl': {
                 'mean': (tot_sum / total_params).cpu().item(),
-                'sigma': torch.sqrt(total_variance / total_params).cpu().item(),
+                'sigma':
+                torch.sqrt(total_variance / total_params).cpu().item(),
             }
         }
         return stats
