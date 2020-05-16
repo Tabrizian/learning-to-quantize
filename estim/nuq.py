@@ -37,6 +37,7 @@ class NUQEstimator(GradientEstimator):
 
     def grad(self, model_new, in_place=False):
         model = model_new
+        ig_sm_bkts = self.opt.nuq_ig_sm_bkts
 
         if self.acc_grad is None:
             self.acc_grad = []
@@ -54,34 +55,18 @@ class NUQEstimator(GradientEstimator):
             grad = torch.autograd.grad(loss, model.parameters())
             layers = len(list(model.parameters()))
 
-            per_layer = False
+            per_layer = not self.opt.nuq_layer
             with torch.no_grad():
-                if self.opt.nuq_layer == 1:
-                    flattened_array = self._flatten(grad)
-                    gradient_quantized = self.qdq.quantize(
-                        flattened_array, layers) / self.ngpu
-                    unflattened_array = self.unflatten(
-                        gradient_quantized, grad)
-                    for g, a in zip(unflattened_array, self.acc_grad):
-                        a += g
+                if not per_layer:
+                    flatt_grad = self._flatten(grad)
+                    flatt_grad_q = self.qdq.quantize(flatt_grad, ig_sm_bkts)
+                    grad_like_q = self.unflatten(flatt_grad_q, grad)
+                    for g, a in zip(grad_like_q, self.acc_grad):
+                        a += g / self.ngpu
+
                 else:
                     for g, a in zip(grad, self.acc_grad):
-                        bs = self.opt.nuq_bucket_size
-                        num_tail = math.ceil(g.numel() / bs) * bs - g.numel()
-                        xv = torch.cat(
-                            (g.view(-1), torch.zeros(num_tail, dtype=g.dtype, device=g.device)))
-                        xv = xv.view(-1, bs)
-
-                        # if the bucket is undersized
-                        if num_tail > 0 and xv.size()[0] > 1:
-                            quantized = self.qdq.quantize(xv[:-1].view(-1))
-                            # remove the zeros and create the flattened
-                            # and quantized version of the gradient
-                            quantized = torch.cat(
-                                [quantized, xv[-1][:-num_tail]])
-                            a += self.unflatten(quantized, g, True) / self.ngpu
-                        else:
-                            a += self.qdq.quantize(g) / self.ngpu
+                        a += self.qdq.quantize(g, ig_sm_bkts) / self.ngpu
 
         if in_place:
             for p, a in zip(model.parameters(), self.acc_grad):
@@ -148,7 +133,8 @@ class NUQEstimatorMultiGPUParallel(GradientEstimator):
                             flattened_array, layers) / self.ngpu
                         unflattened_array = self.unflatten(
                             gradient_quantized, models[i].parameters())
-                        for p, q in zip(models[i].parameters(), unflattened_array):
+                        for p, q in zip(models[i].parameters(),
+                                        unflattened_array):
                             p.grad.copy_(q)
                     else:
                         for p in models[i].parameters():

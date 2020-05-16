@@ -11,6 +11,17 @@ import scipy.integrate as integrate
 EPS = 1e-7
 
 
+def get_quantile_levels(bits, grad_dist):
+    """quantile levels """
+    num_levels = 2 << bits - 1
+    cdf_points = np.linspace(0, 1, num=num_levels)
+    levels = [grad_dist.ppf(level) for level in cdf_points]
+
+    levels[0] = grad_dist.begin
+    levels[-1] = grad_dist.end
+    return levels
+
+
 def calculate_new_error(positive_levels, mean, sigma, min, max):
     sum = []
     trunc_norm = TruncNorm(mean, sigma, min, max)
@@ -51,18 +62,6 @@ def get_uniform_levels(bits):
     num_levels = 2 << bits - 1
     levels_uni = np.linspace(-1, 1, num=num_levels)
     return levels_uni
-
-
-def get_quantile_levels(bits, mean, sigma, min, max):
-    """quantile levels """
-    trunc_norm = TruncNorm(mean, sigma, min, max)
-    num_levels = 2 << bits - 1
-    cdf_points = np.linspace(0, 1, num=num_levels)
-    levels = [trunc_norm.ppf(level) for level in cdf_points]
-
-    levels[0] = min
-    levels[-1] = max
-    return levels
 
 
 def get_uniform_levels(bits):
@@ -373,13 +372,13 @@ class QuantizeMultiBucket(object):
     def update_levels(self):
         interval = self.interval
         mean = self.mean
+        bits = self.bits
         variance = self.variance
         grad_dist_nl = self.grad_dist_nl
         grad_dist_nb = self.grad_dist_nb
         sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
         half_point = int(len(self.levels) / 2)
-        quantile_levels = get_quantile_levels(
-            self.bits, mean, sigma, -interval, interval)
+        quantile_levels = get_quantile_levels(bits, grad_dist_nb)
         uniform_levels = get_uniform_levels(
             self.bits)
         exp_levels = get_exp_levels(
@@ -404,9 +403,8 @@ class QuantizeMultiBucket(object):
 
         elif self.method == 'alq_nb':
             epochs = self.epochs
-            self.levels = get_quantile_levels(
-                self.bits, mean, sigma, -interval, interval)
-            initial_levels = self.levels
+            quantile_levels = get_quantile_levels(bits, grad_dist_nb)
+            initial_levels = quantile_levels
             if self.symmetric:
                 qua_levels, all_levels, qua_losses = alq_sym(
                     initial_levels, grad_dist_nb, epochs)
@@ -479,7 +477,7 @@ class QuantizeMultiBucket(object):
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
 
-    def quantize(self, x, number_of_layers):
+    def quantize(self, x, ig_sm_bkts):
         if self.method == 'none':
             return x
         assert isinstance(x, torch.cuda.FloatTensor)
@@ -491,9 +489,17 @@ class QuantizeMultiBucket(object):
         xv = xv.view(-1, bucket_size)
         norm = xv.norm(p=self.norm_type, dim=1, keepdim=True).expand(
             xv.shape[0], xv.shape[1]).contiguous().view(-1).contiguous()
-        q = torch.zeros_like(x)
-        r = torch.randint_like(x, 1000001).long()
 
-        self.qdq.qdqGPU(x, norm, q, r)
-
-        return q
+        if ig_sm_bkts:
+            if xv.shape[0] > 1:
+                q = torch.zeros_like(xv)
+                r = torch.randint_like(xv, 1000001).long()
+                self.qdq.qdqGPU(xv[:-1], norm[:-1], q[:-1], r[:-1])
+                return torch.cat([q[:-1].view(-1), xv[-1][:-num_tail].view(-1)]).view(x.shape)
+            else:
+                return xv[-1][:-num_tail].view(x.shape)
+        else:
+            q = torch.zeros_like(x)
+            r = torch.randint_like(x, 1000001).long()
+            self.qdq.qdqGPU(x, norm, q, r)
+            return q

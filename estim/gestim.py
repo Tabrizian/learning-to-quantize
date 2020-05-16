@@ -48,10 +48,20 @@ class GradientEstimator(object):
 
         return stats
 
+    def _get_raw_grad(self, model):
+        dt = self.data_iter
+        self.data_iter = self.estim_iter
+        model.zero_grad()
+        data = next(self.data_iter)
+        loss = model.criterion(model, data)
+        grad = torch.autograd.grad(loss, model.parameters())
+        self.data_iter = dt
+        return grad
+
     def _get_grad_samples(self, model, num_of_samples):
         grads = []
         for i in range(num_of_samples):
-            grad = self.grad_estim(model)
+            grad = self._get_raw_grad(model)
             copy_array = []
             for layer in grad:
                 copy_array.append(layer.clone())
@@ -167,6 +177,35 @@ class GradientEstimator(object):
 
         return stats
 
+    def _bucketize(self, grad, bs, stats_nb):
+        ig_sm_bkts = self.opt.nuq_ig_sm_bkts
+        variance = 0
+        num_params = 0
+        tot_sum = 0
+        num_buckets = int(np.ceil(len(grad) / bs))
+        for bucket in range(num_buckets):
+            start = bucket * bs
+            end = min((bucket + 1) * bs, len(grad))
+            current_bk = grad[start:end]
+            norm = current_bk.norm()
+            current_bk = current_bk / norm
+            b_len = len(current_bk)
+            # TODO: REMOVE THIS LINE
+            if b_len != bs and ig_sm_bkts:
+                continue
+            num_params += b_len
+            var = torch.var(current_bk)
+
+            # update norm-less variance
+            variance += var * (b_len - 1)
+            tot_sum += torch.sum(current_bk)
+
+            stats_nb['norms'].append(norm)
+            stats_nb['sigmas'].append(torch.sqrt(var))
+            stats_nb['means'].append(torch.mean(current_bk))
+
+        return tot_sum, variance, num_params
+
     def _get_stats_sep(self, grads):
         # get stats for weights and bias separately
         pass
@@ -261,7 +300,7 @@ class GradientEstimator(object):
         num_of_samples = self.opt.nuq_number_of_samples
         grads = self._get_grad_samples(model, num_of_samples)
 
-        lb = True if self.opt.nuq_layer == 0 else False
+        lb = not self.opt.nuq_layer
         sep = True if self.opt.sep_bias_grad == 1 else False
 
         # TODO implement variations of lb and sep
@@ -288,35 +327,28 @@ class GradientEstimator(object):
         total_params = 0
         bs = self.opt.nuq_bucket_size
 
+        lb = not self.opt.nuq_layer
+        ig_sm_bkts = self.opt.ig_sm_bkts
+
         params = list(model.parameters())
 
         for i in range(num_of_samples):
-            grad = self.grad_estim(model)
-            flattened = self._flatten_lb(grad)
-            for i, layer in enumerate(flattened):
-                num_buckets = int(np.ceil(len(layer) / bs))
-                for bucket in range(num_buckets):
-                    start = bucket * bs
-                    end = min((bucket + 1) * bs, len(layer))
-                    current_bk = layer[start:end]
-                    norm = current_bk.norm()
-                    current_bk = current_bk / norm
-                    b_len = len(current_bk)
-                    # TODO: REMOVE THIS LINE
-                    if b_len != bs:
-                        continue
-                    total_params += b_len
-                    var = torch.var(current_bk)
-
-                    # update norm-less variance
-                    total_variance += var * (b_len - 1)
-                    tot_sum += torch.sum(current_bk)
-
-                    # update norm-based stats
-                    stats_nb['norms'].append(norm)
-                    stats_nb['sigmas'].append(
-                        torch.sqrt(var))
-                    stats_nb['means'].append(torch.mean(current_bk))
+            grad = self._get_raw_grad(model)
+            if lb:
+                flattened = self._flatten_lb(grad)
+                for i, layer in enumerate(flattened):
+                    b_sum, b_var, b_params = self._bucketize(
+                        layer, bs, stats_nb)
+                    tot_sum += b_sum
+                    total_variance += b_var
+                    total_params += b_params
+            else:
+                flattened = self._flatten(grad)
+                b_sum, b_var, b_params = self._bucketize(
+                    flattened, bs, stats_nb)
+                tot_sum += b_sum
+                total_variance += b_var
+                total_params += b_params
 
         nw = sum([w.numel() for w in model.parameters()])
         stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()

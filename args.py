@@ -103,36 +103,50 @@ def add_args():
                         default=argparse.SUPPRESS, type=int)
     parser.add_argument('--no_batch_norm',
                         default=argparse.SUPPRESS, type=bool)
-    # NQU
+    # NUQ
     parser.add_argument('--nuq_method', default='q', help='q|nuq|qinf')
     parser.add_argument('--nuq_bits', default=4, type=int)
     parser.add_argument('--nuq_bucket_size', default=1024, type=int)
     parser.add_argument('--nuq_ngpu', default=1, type=int)
     parser.add_argument('--nuq_mul', default=0.5, type=float)
-    parser.add_argument('--nuq_learning_rate', default=argparse.SUPPRESS, type=float)
+    parser.add_argument('--nuq_amq_lr',
+                        default=argparse.SUPPRESS, type=float)
     parser.add_argument('--untrain_steps', default=0, type=int)
     parser.add_argument('--untrain_lr', default=0.001, type=float)
     parser.add_argument('--untrain_std', default=0.001, type=float)
-    parser.add_argument('--nuq_symmetric', default=False, action='store_true')
+    parser.add_argument('--nuq_sym', default=False, action='store_true')
     parser.add_argument('--nuq_parallel', default='no', help='no|gpu1|ngpu')
     parser.add_argument('--dist_num', default=20, type=int)
     parser.add_argument('--nuq_number_of_samples',
-                        default=argparse.SUPPRESS, type=int, help='NUQ Number of Samples')
+                        default=argparse.SUPPRESS,
+                        type=int,
+                        help='NUQ Number of Samples')
+    parser.add_argument('--nuq_ig_sm_bkts',
+                        action='store_true',
+                        help='NUQ Ignore Small Buckets')
     parser.add_argument('--nuq_truncated_interval',
-                        default=argparse.SUPPRESS, type=float, help='NUQ Truncated Interval')
-    parser.add_argument('--nuq_cd_epochs', default=argparse.SUPPRESS, help='NUQ Adaptive CO Epochs', type=int)
-    parser.add_argument('--nuq_layer', default=1, help='NUQ Adaptive CO Epochs', type=int)
+                        default=argparse.SUPPRESS,
+                        type=float,
+                        help='NUQ Truncated Interval')
+    parser.add_argument('--nuq_cd_epochs', default=argparse.SUPPRESS,
+                        help='NUQ Adaptive CD Epochs', type=int)
+    parser.add_argument('--nuq_layer', action='store_true',
+                        help='NUQ Enable Network Wide Quantization')
     args = parser.parse_args()
     return args
 
 
 def opt_to_nuq_kwargs(opt):
-    return {'ngpu': opt.nuq_ngpu, 'bits': opt.nuq_bits,
-            'bucket_size': opt.nuq_bucket_size, 'method': opt.nuq_method,
-            'multiplier': opt.nuq_mul, 'cd_epochs': opt.nuq_cd_epochs,
-            'number_of_samples': opt.nuq_number_of_samples,
-            'path': opt.logger_name, 'symmetric': opt.nuq_symmetric,
-            'interval': opt.nuq_truncated_interval, 'learning_rate': opt.nuq_learning_rate}
+    return {
+        'ngpu': opt.nuq_ngpu, 'bits': opt.nuq_bits,
+        'bucket_size': opt.nuq_bucket_size, 'method': opt.nuq_method,
+        'multiplier': opt.nuq_mul, 'cd_epochs': opt.nuq_cd_epochs,
+        'number_of_samples': opt.nuq_number_of_samples,
+        'path': opt.logger_name, 'symmetric': opt.nuq_sym,
+        'interval': opt.nuq_truncated_interval,
+        'learning_rate': opt.nuq_learning_rate,
+        'ig_sm_bkts': opt.nuq_ig_sm_bkts
+    }
 
 
 def yaml_opt(yaml_path):

@@ -192,7 +192,8 @@ def cifar10_full(args):
     exclude = ['dataset', 'epochs', 'lr_decay_epoch', 'g_epoch',
                'pretrained', 'niters', 'epoch_iters',
                'gvar_log_iter', 'gvar_start', 'g_bsnap_iter',
-               'g_optim_start', 'nuq_truncated_interval', 'train_accuracy']
+               'g_optim_start', 'nuq_truncated_interval', 'train_accuracy',
+               'nuq_number_of_samples']
     shared_args = [('dataset', dataset),
                    ('optim', ['sgd']),  # 'sgd', 'adam'
                    # ('arch', 'resnet32'),
@@ -213,7 +214,7 @@ def cifar10_full(args):
         ('g_bsnap_iter', 10000),
         # ('g_optim', ''),
         # ('g_optim_start', 0),
-        #('g_epoch', ''),
+        # ('g_epoch', ''),
     ]
     args_sgd = [('g_estim', ['sgd'])]
     args += [OrderedDict(shared_args+gvar_args+args_sgd)]
@@ -225,33 +226,28 @@ def cifar10_full(args):
         ('g_bsnap_iter', 10000),
         # ('g_optim', ''),
         # ('g_optim_start', 0),
-        #('g_epoch', ''),
+        # ('g_epoch', ''),
     ]
 
     args_super_sgd = [
         ('g_estim', ['nuq']),
         ('nuq_bits', 4),
-        ('nuq_bucket_size', [2, 128]),
+        ('nuq_bucket_size', [8192]),
         ('nuq_ngpu', 4),  # 2
         ('dist_num', [20]),
-        ('nuq_layer', 0),
+        ('nuq_layer', ''),
+        ('nuq_ig_sm_bkts', ''),
+        ('nuq_truncated_interval', 1),
+        ('nuq_number_of_samples', 10),
         ('nuq_method', [
-            ('amq', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-             10]), ('nuq_learning_rate', 0.7)])),
-            ('amq_nb', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_learning_rate', 0.7)])),
-            ('alq', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_cd_epochs', 30)])),
-            ('qinf', OrderedDict(
-                [('nuq_truncated_interval', 1), ('nuq_number_of_samples', [10])])),
-            ('alq_nb', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_cd_epochs', 30), ('nuq_symmetric', '')])),
-            ('alq_nb', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_cd_epochs', 30)])),
-            ('nuq', OrderedDict([('nuq_mul', 0.5), ('nuq_truncated_interval',
-                                                    1), ('nuq_number_of_samples', [10])])),
-            ('none', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_learning_rate', 0.7)])),
+            ('amq', OrderedDict([('nuq_amq_lr', 0.7)])),
+            ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7)])),
+            ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
+            'qinf',
+            ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', '')])),
+            ('alq_nb', OrderedDict([('nuq_cd_epochs', 30)])),
+            ('nuq', OrderedDict([('nuq_mul', 0.5)])),
+            'none'
         ])
     ]
     args += [OrderedDict(shared_args+gvar_args+args_super_sgd)]
@@ -266,7 +262,8 @@ def imagenet_full(args):
     exclude = ['dataset', 'epochs', 'lr_decay_epoch', 'g_epoch',
                'pretrained', 'niters', 'epoch_iters',
                'gvar_log_iter', 'gvar_start', 'g_bsnap_iter',
-               'g_optim_start', 'nuq_truncated_interval']
+               'g_optim_start', 'nuq_truncated_interval',
+               'nuq_number_of_samples']
     shared_args = [('dataset', dataset),
                    # ('optim', 'sgd'),  # 'sgd', 'adam'
                    # ('arch', 'resnet18'),
@@ -279,7 +276,7 @@ def imagenet_full(args):
                    ('lr_decay_epoch', '300000,450000'),
                    ('momentum', 0.9),
                    ('weight_decay', 1e-4),
-                   #('train_accuracy', ''),
+                   # ('train_accuracy', ''),
                    ]
     gvar_args = [
         # ('gvar_estim_iter', 10),
@@ -288,37 +285,36 @@ def imagenet_full(args):
         #                 ('g_bsnap_iter', 100*10000),
         #                 ('g_optim', ''),
         #                 ('g_optim_start', 0),
-        #('g_epoch', ''),
+        # ('g_epoch', ''),
         ('gvar_log_iter', 100),  # 100
         ('gvar_start', 0),
         ('g_osnap_iter', 10000),
         ('g_bsnap_iter', 10000),
-        #('g_optim', ''),
-        #('g_optim_start', 0),
+        # ('g_optim', ''),
+        # ('g_optim_start', 0),
         #                 ('g_epoch', ''),
     ]
     args_sgd = [('g_estim', ['sgd'])]
     args += [OrderedDict(shared_args+gvar_args+args_sgd)]
     args_super_sgd = [
         ('g_estim', ['nuq']),
-        ('nuq_bits', [4]),
-        ('nuq_bucket_size', [4096 * 2]),
-        ('nuq_ngpu', 2),  # 2
+        ('nuq_bits', 4),
+        ('nuq_bucket_size', [8192]),
+        ('nuq_ngpu', 4),  # 2
+        ('dist_num', [20]),
+        ('nuq_layer', ''),
+        ('nuq_ig_sm_bkts', ''),
+        ('nuq_truncated_interval', 1),
+        ('nuq_number_of_samples', 10),
         ('nuq_method', [
-            ('amq', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-             10]), ('nuq_learning_rate', 0.7), ('nuq_layer',  0)])),
-            ('amq_nb', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_learning_rate', 0.7), ('nuq_layer',  0)])),
-            ('alq', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_cd_epochs', 30), ('nuq_layer',  0)])),
-            ('qinf', OrderedDict(
-                [('nuq_truncated_interval', 1), ('nuq_number_of_samples', [10]), ('nuq_layer', 0)])),
-            ('alq_nb', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_cd_epochs', 30), ('nuq_layer',  0)])),
-            ('nuq', OrderedDict([('nuq_mul', 0.5), ('nuq_truncated_interval',
-                                                    1), ('nuq_number_of_samples', [10]), ('nuq_layer',  0)])),
-            ('none', OrderedDict([('nuq_truncated_interval', 1), ('nuq_number_of_samples', [
-                10]), ('nuq_learning_rate', 0.7), ('nuq_layer', 0)])),
+            ('amq', OrderedDict([('nuq_amq_lr', 0.7)])),
+            ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7)])),
+            ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
+            'qinf',
+            ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', '')])),
+            ('alq_nb', OrderedDict([('nuq_cd_epochs', 30)])),
+            ('nuq', OrderedDict([('nuq_mul', 0.5)])),
+            'none'
         ])
     ]
     args += [OrderedDict(shared_args+gvar_args+args_super_sgd)]
