@@ -21,42 +21,6 @@ def get_quantile_levels(bits, grad_dist):
     levels[-1] = grad_dist.end
     return levels
 
-
-def calculate_new_error(positive_levels, mean, sigma, min, max):
-    sum = []
-    trunc_norm = TruncNorm(mean, sigma, min, max)
-    for index, level in enumerate(positive_levels[1:-1]):
-        def inline_func(x):
-            normal_func = trunc_norm.pdf(x)
-            index_level = get_level(x, positive_levels)
-            variance = (x - positive_levels[index_level]) * \
-                (positive_levels[index_level + 1] - x)
-            return variance * normal_func
-        sum.append(integrate.quad(lambda x: inline_func(
-            x), positive_levels[index], positive_levels[index + 1]))
-
-    sum.append(integrate.quad(lambda x: (
-        positive_levels[0] ** 2 - x ** 2) * trunc_norm.pdf(x), 0, positive_levels[0]))
-
-    return 2 * np.sum(sum)
-
-
-def calculate_norm_error(positive_levels, means, sigmas, norms, min, max):
-    trunc_norm = CondNormalTrunc(means, sigmas, norms, min, max)
-    sum = []
-    for index, level in enumerate(positive_levels[:-1]):
-        def inline_func(x):
-            normal_func = trunc_norm.pdf(x)
-            index_level = get_level(x, positive_levels)
-            variance = (x - positive_levels[index_level]) * \
-                (positive_levels[index_level + 1] - x)
-            return variance * normal_func
-        sum.append(integrate.fixed_quad(lambda x: inline_func(
-            x), positive_levels[index], positive_levels[index + 1], n=40))
-
-    return 2 * np.sum(sum)
-
-
 def get_uniform_levels(bits):
     """uniform (QSGD)"""
     num_levels = 2 << bits - 1
@@ -185,12 +149,14 @@ def amq_norm_less(initial_point, grad_dist, bits, lr=0.1, epochs=200):
     return mul, all_mul
 
 
-def alq_sym(initial_levels, grad_dist, epochs):
-    # symmetric alq norm-based
-    positive_levels = initial_levels[len(initial_levels) // 2:]
+def alq(initial_levels, grad_dist, epochs, inv=False, sym=True):
     losses = []
     # Assuming last level is 1, setting first dummy level to 0
-    new_levels = [0] + list(positive_levels).copy()
+    if sym:
+        positive_levels = initial_levels[len(initial_levels) // 2:]
+        new_levels = [0] + list(positive_levels).copy()
+    else:
+        new_levels = list(initial_levels).copy()
     all_levels = [new_levels.copy()]
     for epoch in range(epochs):
 
@@ -203,22 +169,32 @@ def alq_sym(initial_levels, grad_dist, epochs):
         for index in range(1, len(new_levels)-1):
             left_level = new_levels[index - 1]
             right_level = new_levels[index + 1]
-            new_levels[index] = finite_diff_gradient_descent(
-                lambda x: objective(x, left_level, right_level),
-                left_level, right_level, x0=new_levels[index])
+            if inv:
+                new_levels[index] = grad_dist.estimate_variance_adj_inv(
+                    left_level, right_level)
+            else:
+                new_levels[index] = finite_diff_gradient_descent(
+                    lambda x: objective(x, left_level, right_level),
+                    left_level, right_level, x0=new_levels[index])
             assert new_levels[index] < right_level and \
                 new_levels[index] > left_level, \
                 "New level is not in the interval"
+        if sym:
+            negative_levels = [-level for level in new_levels]
+            negative_levels.reverse()
+            losses.append(grad_dist.estimate_variance(
+                negative_levels[:-1] + new_levels[1:]))
+            all_levels.append(new_levels.copy())
+        else:
+            losses.append(grad_dist.estimate_variance(new_levels))
+            all_levels.append(new_levels.copy())
+
+    if sym:
+        # dropping dummy level at 0
+        new_levels = new_levels[1:]
         negative_levels = [-level for level in new_levels]
         negative_levels.reverse()
-        losses.append(grad_dist.estimate_variance(
-            negative_levels[:-1] + new_levels[1:]))
-        all_levels.append(new_levels.copy())
-    # dropping dummy level at 0
-    new_levels = new_levels[1:]
-    negative_levels = [-level for level in new_levels]
-    negative_levels.reverse()
-    new_levels = negative_levels + new_levels
+        new_levels = negative_levels + new_levels
     return new_levels, all_levels, losses
 
 
@@ -383,15 +359,17 @@ class QuantizeMultiBucket(object):
 
         bits = self.bits
         if self.method == 'alq':
+            inv = self.inv
+            sym = self.symmetric
             epochs = self.epochs
             initial_levels = self.levels
 
-            levels_qua, _, losses_qua = alq_sym(
-                quantile_levels, grad_dist_nl, epochs)
-            levels_uniform, _, losses_uni = alq_sym(
-                uniform_levels, grad_dist_nl, epochs)
-            levels_exp, _, losses_exp = alq_sym(
-                exp_levels, grad_dist_nl, epochs)
+            levels_qua, _, losses_qua = alq(
+                quantile_levels, grad_dist_nl, epochs, inv, sym)
+            levels_uniform, _, losses_uni = alq(
+                uniform_levels, grad_dist_nl, epochs, inv, sym)
+            levels_exp, _, losses_exp = alq(
+                exp_levels, grad_dist_nl, epochs, inv, sym)
             candidate_levels = np.asarray(
                 [levels_qua, levels_uniform, levels_exp])
             candidate_losses = np.asarray(
@@ -400,36 +378,20 @@ class QuantizeMultiBucket(object):
 
         elif self.method == 'alq_nb':
             epochs = self.epochs
+            inv = self.inv
+            sym = self.symmetric
             quantile_levels = get_quantile_levels(bits, grad_dist_nb)
-            initial_levels = quantile_levels
-            if self.symmetric:
-                qua_levels, all_levels, qua_losses = alq_sym(
-                    initial_levels, grad_dist_nb, epochs)
-                levels_qua, _, losses_qua = alq_sym(
-                    quantile_levels, grad_dist_nb, epochs)
-                levels_uniform, _, losses_uni = alq_sym(
-                    uniform_levels, grad_dist_nb, epochs)
-                levels_exp, _, losses_exp = alq_sym(
-                    exp_levels, grad_dist_nb, epochs)
-                candidate_levels = np.asarray(
-                    [levels_qua, levels_uniform, levels_exp])
-                candidate_losses = np.asarray(
-                    [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
-                self.levels = candidate_levels[np.argsort(candidate_losses)][0]
-            else:
-                qua_levels, all_levels, qua_losses = alq_asym(
-                    initial_levels, grad_dist_nb, epochs)
-                levels_qua, _, losses_qua = alq_asym(
-                    quantile_levels, grad_dist_nb, epochs)
-                levels_uniform, _, losses_uni = alq_asym(
-                    uniform_levels, grad_dist_nb, epochs)
-                levels_exp, _, losses_exp = alq_asym(
-                    exp_levels, grad_dist_nb, epochs)
-                candidate_levels = np.asarray(
-                    [levels_qua, levels_uniform, levels_exp])
-                candidate_losses = np.asarray(
-                    [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
-                self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+            levels_qua, _, losses_qua = alq(
+                quantile_levels, grad_dist_nb, epochs, inv, sym)
+            levels_uniform, _, losses_uni = alq(
+                uniform_levels, grad_dist_nb, epochs, inv, sym)
+            levels_exp, _, losses_exp = alq(
+                exp_levels, grad_dist_nb, epochs, inv, sym)
+            candidate_levels = np.asarray(
+                [levels_qua, levels_uniform, levels_exp])
+            candidate_losses = np.asarray(
+                [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+            self.levels = candidate_levels[np.argsort(candidate_losses)][0]
 
         elif self.method == 'amq':
             initial_points = []

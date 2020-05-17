@@ -115,6 +115,7 @@ def add_args():
     parser.add_argument('--untrain_lr', default=0.001, type=float)
     parser.add_argument('--untrain_std', default=0.001, type=float)
     parser.add_argument('--nuq_sym', default=False, action='store_true')
+    parser.add_argument('--nuq_inv', default=False, action='store_true')
     parser.add_argument('--nuq_parallel', default='no', help='no|gpu1|ngpu')
     parser.add_argument('--dist_num', default=20, type=int)
     parser.add_argument('--chkpt_iter', default=20, type=int)
@@ -146,7 +147,7 @@ def opt_to_nuq_kwargs(opt):
         'path': opt.logger_name, 'symmetric': opt.nuq_sym,
         'interval': opt.nuq_truncated_interval,
         'learning_rate': opt.nuq_learning_rate,
-        'ig_sm_bkts': opt.nuq_ig_sm_bkts
+        'ig_sm_bkts': opt.nuq_ig_sm_bkts, 'inv': opt.nuq_inv
     }
 
 
