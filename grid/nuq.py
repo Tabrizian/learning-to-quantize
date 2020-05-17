@@ -193,13 +193,14 @@ def cifar10_full(args):
                'pretrained', 'niters', 'epoch_iters',
                'gvar_log_iter', 'gvar_start', 'g_bsnap_iter',
                'g_optim_start', 'nuq_truncated_interval', 'train_accuracy',
-               'nuq_number_of_samples']
+               'nuq_number_of_samples', 'chkpt_iter']
     shared_args = [('dataset', dataset),
                    ('optim', ['sgd']),  # 'sgd', 'adam'
                    # ('arch', 'resnet32'),
                    ('arch', ['resnet32']),
                    ('batch_size', 128),
                    ('lr', [0.1]),
+                   ('chkpt_iter', 2000),
                    ('momentum', 0.9),
                    ('weight_decay', 1e-4),
                    ('niters', 80000),
@@ -231,8 +232,8 @@ def cifar10_full(args):
 
     args_super_sgd = [
         ('g_estim', ['nuq']),
-        ('nuq_bits', [3]),
-        ('nuq_bucket_size', [8192]),
+        ('nuq_bits', [3, 4]),
+        ('nuq_bucket_size', [8192, 8192*2]),
         ('nuq_ngpu', 4),  # 2
         ('dist_num', [50]),
         ('nuq_layer', ''),
@@ -263,7 +264,7 @@ def imagenet_full(args):
                'pretrained', 'niters', 'epoch_iters',
                'gvar_log_iter', 'gvar_start', 'g_bsnap_iter',
                'g_optim_start', 'nuq_truncated_interval',
-               'nuq_number_of_samples']
+               'nuq_number_of_samples', 'chkpt_iter']
     shared_args = [('dataset', dataset),
                    # ('optim', 'sgd'),  # 'sgd', 'adam'
                    # ('arch', 'resnet18'),
@@ -272,6 +273,7 @@ def imagenet_full(args):
                    ('batch_size', 64),  # 256),
                    ('niters', 60*10000),
                    ('epoch_iters', 1000),
+                   ('ckpt_iter', 2000),
                    ('lr', 0.1),
                    ('lr_decay_epoch', '300000,450000'),
                    ('momentum', 0.9),
@@ -301,11 +303,12 @@ def imagenet_full(args):
         ('nuq_bits', 4),
         ('nuq_bucket_size', [8192]),
         ('nuq_ngpu', 4),  # 2
-        ('dist_num', [20]),
+        ('dist_num', [50]),
         ('nuq_layer', ''),
         ('nuq_ig_sm_bkts', ''),
         ('nuq_truncated_interval', 1),
         ('nuq_number_of_samples', 10),
+
         ('nuq_method', [
             ('amq', OrderedDict([('nuq_amq_lr', 0.7)])),
             ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7)])),

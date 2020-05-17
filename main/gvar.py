@@ -114,6 +114,7 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
             save_checkpoint(model, float(prec1), opt, optimizer,
                             gvar=optimizer.gvar)
             tb_logger.save_log()
+    optimizer.niters = 0
 
 
 def untrain(model, gvar, opt):
