@@ -314,6 +314,7 @@ class QuantizeMultiBucket(object):
         self.epochs = kwargs['cd_epochs']
         self.path = kwargs['path']
         self.symmetric = kwargs['symmetric']
+        self.inv = kwargs['inv']
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
         self.mean_weights = 0
