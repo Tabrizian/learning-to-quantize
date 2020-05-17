@@ -62,7 +62,7 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
     batch_time = Profiler()
     model.train()
     profiler = Profiler()
-    init_iters = optimizer.niters
+    init_iters = optimizer.niters % opt.epoch_iters
     optimizer.logger.reset()
     for batch_idx in range(init_iters, opt.epoch_iters):
         profiler.start()
@@ -114,7 +114,6 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
             save_checkpoint(model, float(prec1), opt, optimizer,
                             gvar=optimizer.gvar)
             tb_logger.save_log()
-    optimizer.niters = 0
 
 
 def untrain(model, gvar, opt):

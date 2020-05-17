@@ -61,18 +61,12 @@ class OptimizerFactory(object):
                 else:
                     gvar.gest.qdq.set_mean_variance(stats)
 
-            if opt.nuq_method == 'amq' or opt.nuq_method == 'nuq4' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
+            if opt.nuq_method == 'amq' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
                 if opt.nuq_parallel == 'ngpu':
                     for qdq in gvar.gest.qdq:
                         qdq.update_levels()
                 else:
                     gvar.gest.qdq.update_levels()
-
-        if ((self.niters - opt.gvar_start) % opt.g_bsnap_iter == 0
-                and self.niters > opt.gvar_start):
-            print(self.niters)
-            if opt.nuq_method == 'nuq4':
-                gvar.gest.qdq.bits += 1
 
         pg_used = gvar.gest_used
         loss = gvar.grad(self.niters)

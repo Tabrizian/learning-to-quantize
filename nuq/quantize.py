@@ -319,9 +319,6 @@ class QuantizeMultiBucket(object):
         elif method == 'amq_nb':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
-        elif method == 'nuq4':
-            self.levels = get_exp_levels(bits, multiplier)
-            self.norm_type = 'fro'
         elif method == 'alq':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
