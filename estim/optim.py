@@ -61,7 +61,7 @@ class OptimizerFactory(object):
                 else:
                     gvar.gest.qdq.set_mean_variance(stats)
 
-            if opt.nuq_method == 'amq' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb':
+            if opt.nuq_method == 'amq' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb' or opt.nuq_method == 'amq_nb':
                 if opt.nuq_parallel == 'ngpu':
                     for qdq in gvar.gest.qdq:
                         qdq.update_levels()
