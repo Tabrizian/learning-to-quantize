@@ -51,7 +51,7 @@ def cifar10_full(args):
     shared_args = [('dataset', dataset),
                    ('optim', ['sgd']),  # 'sgd', 'adam'
                    # ('arch', 'resnet32'),
-                   ('arch', ['resnet32']),
+                   ('arch', ['resnet32', 'resnet110']),
                    ('batch_size', 128),
                    ('lr', [0.1]),
                    ('chkpt_iter', 2000),
@@ -79,8 +79,8 @@ def cifar10_full(args):
         ('gvar_start', 0),
         ('g_osnap_iter', 1000),
         ('g_bsnap_iter', 10000),
-        ('g_optim', ''),
-        ('g_optim_start', 0),
+        # ('g_optim', ''),
+        # ('g_optim_start', 0),
         # ('g_epoch', ''),
     ]
 
@@ -95,8 +95,8 @@ def cifar10_full(args):
         ('nuq_truncated_interval', 1),
         ('nuq_number_of_samples', 10),
         ('nuq_method', [
-            ('amq', OrderedDict([('nuq_amq_lr', 0.7)])),
-            ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7)])),
+            ('amq', OrderedDict([('nuq_amq_lr', 0.7), ('nuq_amq_epochs', 40)])),
+            ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7, ('nuq_amq_epochs', 40))])),
             ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
             'qinf',
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', ''), ('nuq_inv', '')])),
@@ -129,7 +129,7 @@ def imagenet_full(args):
                    ('batch_size', 64),  # 256),
                    ('niters', 60*10000),
                    ('epoch_iters', 1000),
-                   ('ckpt_iter', 2000),
+                   ('chkpt_iter', 2000),
                    ('lr', 0.1),
                    ('lr_decay_epoch', '300000,450000'),
                    ('momentum', 0.9),

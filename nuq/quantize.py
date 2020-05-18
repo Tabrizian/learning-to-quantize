@@ -75,7 +75,7 @@ def bisection(begin, end, f):
     return bisection(begin, x, f)
 
 
-def amq_norm_based(initial_point, grad_dist, bits, lr=0.1, epochs=200):
+def amq_norm_based(initial_point, grad_dist, bits, lr=0.1, epochs=50):
     mul = initial_point
     s = 2 ** (bits - 1) - 1
     all_mul = []
@@ -198,24 +198,6 @@ def alq(initial_levels, grad_dist, epochs, inv=False, sym=True):
     return new_levels, all_levels, losses
 
 
-def alq_asym(initial_levels, grad_dist, epochs):
-    # asymmetric alq norm-based
-    # TODO I need to test it
-    losses = []
-    new_levels = list(initial_levels).copy()
-    all_levels = [new_levels.copy()]
-    for epoch in range(epochs):
-        for index in range(1, len(new_levels)-1):
-            left_level = new_levels[index - 1]
-            right_level = new_levels[index + 1]
-            new_levels[index] = grad_dist.estimate_variance_adj_inv(
-                left_level, right_level)
-            assert new_levels[index] < right_level and \
-                new_levels[index] > left_level
-
-        losses.append(grad_dist.estimate_variance(new_levels))
-        all_levels.append(new_levels.copy())
-    return new_levels, all_levels, losses
 
 
 def get_exp_levels(bits, multiplier):
@@ -313,6 +295,8 @@ class QuantizeMultiBucket(object):
         self.bits = bits
         self.epochs = kwargs['cd_epochs']
         self.path = kwargs['path']
+        self.amq_lr = kwargs['amq_lr']
+        self.amq_epochs = kwargs['amq_epochs']
         self.symmetric = kwargs['symmetric']
         self.inv = kwargs['inv']
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
@@ -404,15 +388,15 @@ class QuantizeMultiBucket(object):
                                   self.previous_best,  0.8, 0.9]
             optimal_points = []
             for point in initial_points:
-                optimal_p, _ = amq_norm_less(point, grad_dist_nl, self.bits)
+                optimal_p, _ = amq_norm_less(point, grad_dist_nl, bits, self.amq_lr, self.amq_epochs)
                 optimal_points.append(optimal_p)
             optimal_points_costs = [
-                grad_dist_nl.estimate_variance(get_exp_levels(self.bits, p)[
+                grad_dist_nl.estimate_variance(get_exp_levels(bits, p)[
                     half_point:]) for p in optimal_points]
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
-            self.levels = get_exp_levels(self.bits, self.multiplier)
+            self.levels = get_exp_levels(bits, self.multiplier)
 
         elif self.method == 'amq_nb':
             initial_points = []
@@ -424,10 +408,10 @@ class QuantizeMultiBucket(object):
                                   self.previous_best,  0.8, 0.9]
             optimal_points = []
             for point in initial_points:
-                optimal_p, _ = amq_norm_based(point, grad_dist_nb, bits)
+                optimal_p, _ = amq_norm_based(point, grad_dist_nb, bits, self.amq_lr, self.amq_epochs)
                 optimal_points.append(optimal_p)
             optimal_points_costs = [
-                grad_dist_nb.estimate_variance(get_exp_levels(self.bits, p)[
+                grad_dist_nb.estimate_variance(get_exp_levels(bits, p)[
                     half_point:]) for p in optimal_points]
             index = np.argmin(optimal_points_costs)
             self.multiplier = optimal_points[index]
