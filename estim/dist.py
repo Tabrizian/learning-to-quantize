@@ -28,36 +28,16 @@ class Distribution:
         # int_a^b sigma^2(r) f(r) dr
         # = sum_{ind(e_l)}^{ind(e_r)} f(r)
         #         int_{max(a,e_l)}^{min(e_r,b)} sigma^2(r) dr
-        # TODO: test this function
         bin_edges = self.bin_edges
-        # TODO: test these bisects
-        # left_edge = bisect.bisect_right(bin_edges, left_level)-1
-        # right_edge = bisect.bisect_left(bin_edges, right_level)
         var = 0
 
         c = left_level
         d = right_level
 
-        # for index in range(left_edge, right_edge):
-        #     a = max(bin_edges[index], left_level)
-        #     b = min(bin_edges[index+1], right_level)
-        #     # int_a^b (x - c) (d - x) dx = 1/6 (a - b) (2 a^2 + 2 a b
-        #     #         - 3 a (c + d) + 2 b^2 - 3 b (c + d) + 6 c d)
-        #     #         where c is left_level and d is right_level
-        #     center = (a+b)/2
-        #     var += self.pdf(center) * 1/6 * (a-b) * (
-        #         2*a**2+2*a*b-3*a*(c+d)+2*b**2-3*b*(c+d)+6*c*d)
-
         def f(x):
             return (x - c) * (d - x) * self.pdf(x)
 
-        # print('adj_lev', left_level, right_level)
         intg = integrate.quad(f, c, d)[0]
-        # x = np.linspace(c, d, 10000)
-        # y = [f(val_x) for val_x in x]
-        # plt.plot(x, y)
-        # plt.show()
-        # assert np.abs(intg - var) < 1e-5
 
         return intg
 
@@ -68,34 +48,12 @@ class Distribution:
         # = sum_{ind(e_l)}^{ind(e_r)} f(r)
         #         int_{max(a,e_l)}^{min(e_r,b)} (r-c) dr
         # where c is left_level and d is right_level
-        bin_edges = self.bin_edges
-        # left_edge = bisect.bisect_right(bin_edges, left_level)-1
-        # right_edge = bisect.bisect_left(bin_edges, right_level)
-        intg = 0
         c = left_level
         d = right_level
 
-        # for index in range(left_edge, right_edge):
-        #     a = max(bin_edges[index], left_level)
-        #     b = min(bin_edges[index+1], right_level)
-        #     # int_a^b (r - c) dr = -1/2 (a - b) (a + b - 2 c)
-        #     # where c is left_level and d is right_level
-        #     center = (a+b)/2
-        #     intg += self.pdf(center) * -1/2 * (a - b) * (a + b - 2 * c)
-
         def f(x):
             return (x - c) * self.pdf(x)
-        # print('adj_lev_inv', left_level, right_level)
-        # x = np.linspace(c, d, 10000)
-        # y = [f(val_x) for val_x in x]
-        # plt.plot(x, y)
-        # plt.show()
         intg_by_intg = integrate.quad(f, c, d)[0]
-        # err = np.abs(intg - intg_by_intg)
-
-        #assert err < 1e-4, \
-        #    'Integration does not have enough accuracy left level %s, right level %s, error is %s' \
-        #    % (left_level, right_level, err)
 
         inv_arg = self.cdf(right_level) - intg_by_intg / (d-c)
         return self.ppf(inv_arg)
