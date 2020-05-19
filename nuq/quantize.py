@@ -447,3 +447,27 @@ class QuantizeMultiBucket(object):
             r = torch.randint_like(x, 1000001).long()
             self.qdq.qdqGPU(x, norm, q, r)
             return q
+    
+    def state_dict(self):
+        return {
+            'levels': self.levels,
+            'means': self.grad_dist_nb.means,
+            'sigmas': self.grad_dist_nb.sigmas,
+            'norms': self.grad_dist_nb.norms,
+            'sigma': self.grad_dist_nl.sigma,
+            'mean': self.grad_dist_nl.mean,
+            'error': self.error
+        }
+    
+    def load_state_dict(self, state):
+        self.levels = state['levels']
+        self.grad_dist_nb = CondNormalTruncHist(
+            state['means'], state['sigmas'], state['norms'], -1,
+            1, nbins=100000, bin_type='linear')
+
+        self.grad_dist_nl = TruncNorm(
+            state['mean'], state['sigma'], -1,
+            1, nbins=100000, bin_type='linear')
+        
+        self.error = state['error']
+

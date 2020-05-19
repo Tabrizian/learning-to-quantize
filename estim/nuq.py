@@ -17,6 +17,15 @@ class NUQEstimator(GradientEstimator):
         self.qdq = QuantizeMultiBucket(**opt_to_nuq_kwargs(self.opt))
         self.ngpu = self.opt.nuq_ngpu
         self.acc_grad = None
+    
+    def state_dict(self):
+        return {
+            'qdq': self.qdq.state_dict()
+        }
+    
+    def load_state_dict(self, state):
+        print(state)
+        self.qdq.load_state_dict(state['qdq'])
 
     def get_norm_distribution(self, model, gviter, bucket_size=1024):
         norms = {}
