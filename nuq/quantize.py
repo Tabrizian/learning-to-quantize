@@ -382,10 +382,10 @@ class QuantizeMultiBucket(object):
             initial_points = []
 
             if self.previous_best is None:
-                initial_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 0.9]
+                initial_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9]
             else:
                 initial_points = [0.1, 0.2, 0.3, 0.4,
-                                  self.previous_best,  0.8, 0.9]
+                                  self.previous_best, 0.5,  0.8, 0.9]
             optimal_points = []
             for point in initial_points:
                 optimal_p, _ = amq_norm_less(point, grad_dist_nl, bits, self.amq_lr, self.amq_epochs)
@@ -405,7 +405,7 @@ class QuantizeMultiBucket(object):
                 initial_points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 0.9]
             else:
                 initial_points = [0.1, 0.2, 0.3, 0.4,
-                                  self.previous_best,  0.8, 0.9]
+                                  self.previous_best, 0.5, 0.8, 0.9]
             optimal_points = []
             for point in initial_points:
                 optimal_p, _ = amq_norm_based(point, grad_dist_nb, bits, self.amq_lr, self.amq_epochs)
