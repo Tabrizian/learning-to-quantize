@@ -31,13 +31,6 @@ def get_uniform_levels(bits):
     return levels_uni
 
 
-def get_uniform_levels(bits):
-    """uniform (QSGD)"""
-    num_levels = 2 << bits - 1
-    levels_uni = np.linspace(-1, 1, num=num_levels)
-    return levels_uni
-
-
 def get_exp_levels(bits, multiplier=0.5):
     """ exponential (NUQSGD)
 
@@ -199,29 +192,6 @@ def alq(initial_levels, grad_dist, epochs, inv=False, sym=True):
         negative_levels.reverse()
         new_levels = negative_levels + new_levels
     return new_levels, all_levels, losses
-
-
-
-
-def get_exp_levels(bits, multiplier):
-    """ exponential (NUQSGD)
-
-    multiplier: is used to modify levels_exp based on the number of bits
-    """
-    num_levels = 2 << bits - 1
-
-    # if bits == 2:
-    #     multiplier = 0.1
-    # elif bits == 4:
-    #     multiplier = 0.5
-    # elif bits == 6:
-    #     multiplier = 0.9
-    # elif bits == 8:
-    #     multiplier = 0.95
-    levels = sum([[-multiplier**j for j in range(num_levels >> 1)],
-                  [multiplier**j for j in reversed(range(num_levels >> 1))]],
-                 [])
-    return levels
 
 
 def get_exp_levels(bits, multiplier):
@@ -395,7 +365,8 @@ class QuantizeMultiBucket(object):
                                   self.previous_best, 0.5,  0.8, 0.9]
             optimal_points = []
             for point in initial_points:
-                optimal_p, _ = amq_norm_less(point, grad_dist_nl, bits, self.amq_lr, self.amq_epochs)
+                optimal_p, _ = amq_norm_less(
+                    point, grad_dist_nl, bits, self.amq_lr, self.amq_epochs)
                 optimal_points.append(optimal_p)
             optimal_points_costs = [
                 grad_dist_nl.estimate_variance(get_exp_levels(bits, p)[
@@ -415,7 +386,8 @@ class QuantizeMultiBucket(object):
                                   self.previous_best, 0.5, 0.8, 0.9]
             optimal_points = []
             for point in initial_points:
-                optimal_p, _ = amq_norm_based(point, grad_dist_nb, bits, self.amq_lr, self.amq_epochs)
+                optimal_p, _ = amq_norm_based(
+                    point, grad_dist_nb, bits, self.amq_lr, self.amq_epochs)
                 optimal_points.append(optimal_p)
             optimal_points_costs = [
                 grad_dist_nb.estimate_variance(get_exp_levels(bits, p)[
@@ -455,7 +427,7 @@ class QuantizeMultiBucket(object):
             r = torch.randint_like(x, 1000001).long()
             self.qdq.qdqGPU(x, norm, q, r)
             return q
-    
+
     def state_dict(self):
         if self.method == 'none':
             return {}
@@ -468,7 +440,7 @@ class QuantizeMultiBucket(object):
             'mean': self.grad_dist_nl.mean,
             'error': self.error
         }
-    
+
     def load_state_dict(self, state):
         if self.method == 'none':
             return
@@ -483,4 +455,3 @@ class QuantizeMultiBucket(object):
         self.qdq = QDQ(self.levels)
 
         self.error = state['error']
-

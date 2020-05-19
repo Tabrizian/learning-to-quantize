@@ -19,12 +19,6 @@ class MinVarianceGradient(object):
         elif opt.g_estim == 'nuq':
             if opt.nuq_parallel == 'no':
                 gest = NUQEstimator(data_loader, opt, tb_logger)
-#            elif opt.nuq_parallel == 'gpu1':
-#                gest = NUQEstimatorSingleGPUParallel(
-#                    data_loader, opt, tb_logger)
-            else:
-                gest = NUQEstimatorMultiGPUParallel(
-                    data_loader, opt, tb_logger)
         self.sgd = sgd
         self.gest = gest
         self.opt = opt
@@ -42,51 +36,11 @@ class MinVarianceGradient(object):
             return True
         return False
 
-    def create_histogram(self, norms, buckets):
-        keys = norms.keys()
-        bucket_norms = {}
-
-        def find_bucket(x):
-            for i in range(len(buckets) - 1):
-                if x >= buckets[i] and x < buckets[i + 1]:
-                    return i
-            return len(buckets) - 1
-
-        for key in keys:
-            bucket = find_bucket(key)
-            if bucket not in bucket_norms.keys():
-                bucket_norms[bucket] = []
-
-            bucket_norms[bucket].append(norms[key])
-
-        variance = []
-        for i in range(len(buckets)):
-            if i not in bucket_norms.keys():
-                bucket_norms[i] = []
-                variance.append(0)
-            else:
-                variance.append(torch.var(torch.stack(bucket_norms[i])))
-
-        return variance
-
     def log_var(self, model, niters):
         tb_logger = self.tb_logger
         gviter = self.opt.gvar_estim_iter
         Ege, var_e, snr_e, nv_e = self.gest.get_Ege_var(model, gviter)
         Esgd, var_s, snr_s, nv_s = self.sgd.get_Ege_var(model, gviter)
-        if self.opt.g_estim == 'sgd':
-            parameters = torch.cat([layer.view(-1)
-                                    for layer in self.sgd.grad(model)])
-            tb_logger.log_histogram('sgd_dist', parameters, step=niters)
-            norms = self.sgd.get_norm_distribution(
-                model, gviter, self.opt.nuq_bucket_size)
-            tb_logger.log_histogram(
-                'norm_dist', list(norms.keys()), step=niters)
-            variance = self.create_histogram(norms, [0, 0.01, 0.05, 0.1, 0.2])
-            for index, var in enumerate(variance):
-                tb_logger.log_value('var/' + str(index), var, step=niters)
-        variances, means, total_mean, total_variance, total_variance_normalized, total_mean_normalized, total_mean_unconcatenated, total_variance_unconcatenated = self.sgd.get_gradient_distribution(
-            model, gviter, self.opt.nuq_bucket_size)
         bias = torch.mean(torch.cat(
             [(ee-gg).abs().flatten() for ee, gg in zip(Ege, Esgd)]))
         if self.opt.g_estim == 'nuq':
@@ -132,15 +86,6 @@ class MinVarianceGradient(object):
         tb_logger.log_value('sgd_snr', float(snr_s), step=niters)
         tb_logger.log_value('est_nvar', float(nv_e), step=niters)
         tb_logger.log_value('sgd_nvar', float(nv_s), step=niters)
-        tb_logger.log_value('tot_var_norm', float(
-            total_variance_normalized), step=niters)
-        tb_logger.log_value('tot_var', float(total_variance), step=niters)
-        tb_logger.log_value('tot_mean_norm', float(
-            total_mean_normalized), step=niters)
-        tb_logger.log_value('tot_mean', float(total_mean), step=niters)
-        tb_logger.log_value('tot_var_norm_layer', float(
-            total_variance_unconcatenated), step=niters)
-        tb_logger.log_value('tot_mean_norm_layer', float(), step=niters)
         sgd_x, est_x = ('', '[X]') if self.gest_used else ('[X]', '')
         return ('G Bias: %.8f\t'
                 '%sSGD Var: %.8f\t %sEst Var: %.8f\t'
