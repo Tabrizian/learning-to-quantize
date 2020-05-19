@@ -79,8 +79,8 @@ def cifar10_full(args):
         ('gvar_start', 0),
         ('g_osnap_iter', 1000),
         ('g_bsnap_iter', 10000),
-        # ('g_optim', ''),
-        # ('g_optim_start', 0),
+        ('g_optim', ''),
+        ('g_optim_start', 0),
         # ('g_epoch', ''),
     ]
 
@@ -96,7 +96,7 @@ def cifar10_full(args):
         ('nuq_number_of_samples', 10),
         ('nuq_method', [
             ('amq', OrderedDict([('nuq_amq_lr', 0.7), ('nuq_amq_epochs', 40)])),
-            ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7, ('nuq_amq_epochs', 40))])),
+            ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7), ('nuq_amq_epochs', 40)])),
             ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
             'qinf',
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', ''), ('nuq_inv', '')])),
@@ -146,7 +146,7 @@ def imagenet_full(args):
         # ('g_epoch', ''),
         ('gvar_log_iter', 100),  # 100
         ('gvar_start', 0),
-        ('g_osnap_iter', 10000),
+        ('g_osnap_iter', '100,2000,10000'),
         ('g_bsnap_iter', 10000),
         # ('g_optim', ''),
         # ('g_optim_start', 0),
@@ -159,7 +159,7 @@ def imagenet_full(args):
         ('nuq_bits', [3, 4]),
         ('nuq_bucket_size', [8192, 8192*2]),
         ('nuq_ngpu', 4),  # 2
-        ('dist_num', [50]),
+        ('dist_num', [250]),
         ('nuq_layer', ''),
         ('nuq_ig_sm_bkts', ''),
         ('nuq_truncated_interval', 1),

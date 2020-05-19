@@ -40,8 +40,10 @@ def slurm(sargs, prefix):
 #SBATCH --array=0-{njobs}
 #SBATCH --time=300:00:00
 #SBATCH --gres=gpu:1              # Number of GPUs (per node)
-#SBATCH -c 9
+#SBATCH -c 3
 #SBATCH --mem=18G
+#SBATCH --mail-type=ALL,ARRAY_TASKS
+#SBATCH --mail-user=iman.tabrizian+slurm@gmail.com
 #SBATCH -p {partition}
 #SBATCH --ntasks=1
 

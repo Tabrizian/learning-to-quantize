@@ -108,7 +108,7 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
                 test(tb_logger,
                      model, train_test_loader, opt, optimizer.niters,
                      'Train', 'T')
-        if optimizer.niters % opt.chkpt_iter == 0:
+        if optimizer.niters % opt.chkpt_iter == 0 or  optimizer.niters % opt.epoch_iters == 0:
             prec1 = test(tb_logger,
                          model, test_loader, opt, optimizer.niters)
             save_checkpoint(model, float(prec1), opt, optimizer,

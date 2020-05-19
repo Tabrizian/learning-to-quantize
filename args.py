@@ -110,7 +110,9 @@ def add_args():
     parser.add_argument('--nuq_ngpu', default=1, type=int)
     parser.add_argument('--nuq_mul', default=0.5, type=float)
     parser.add_argument('--nuq_amq_lr',
-                        default=argparse.SUPPRESS, type=float)
+                        default=0.7, type=float)
+    parser.add_argument('--nuq_amq_epochs',
+                        default=50, type=int)
     parser.add_argument('--untrain_steps', default=0, type=int)
     parser.add_argument('--untrain_lr', default=0.001, type=float)
     parser.add_argument('--untrain_std', default=0.001, type=float)
@@ -145,8 +147,8 @@ def opt_to_nuq_kwargs(opt):
         'multiplier': opt.nuq_mul, 'cd_epochs': opt.nuq_cd_epochs,
         'number_of_samples': opt.nuq_number_of_samples,
         'path': opt.logger_name, 'symmetric': opt.nuq_sym,
-        'interval': opt.nuq_truncated_interval,
-        'learning_rate': opt.nuq_learning_rate,
+        'interval': opt.nuq_truncated_interval, 'amq_epochs': opt.nuq_amq_epochs,
+        'learning_rate': opt.nuq_learning_rate, 'amq_lr': opt.nuq_amq_lr,
         'ig_sm_bkts': opt.nuq_ig_sm_bkts, 'inv': opt.nuq_inv
     }
 

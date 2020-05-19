@@ -5,6 +5,7 @@ import re
 import torch
 import pylab as plt
 import matplotlib.ticker as mtick
+from tensorboard.backend.event_processing import event_accumulator
 
 
 def get_run_names(logdir, patterns):
@@ -15,6 +16,19 @@ def get_run_names(logdir, patterns):
                 run_names += [root]
     # print(run_names)
     run_names.sort()
+    return run_names
+
+
+def get_run_names_events(logdir, patterns):
+    run_names = {}
+    for pattern in patterns:
+        for root, subdirs, files in os.walk(logdir, followlinks=True):
+            if re.match(pattern, root):
+                run_names[root] = []
+                for file in files:
+                    if re.match('.*events\.out.*', file):
+                        run_names[root].append(file)
+    # print(run_names)
     return run_names
 
 
@@ -33,10 +47,38 @@ def get_data_pth(logdir, run_names, tag_names, batch_size=None):
     return data
 
 
+def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
+    data = []
+    for run_name, events in run_names.items():
+        d = {}
+
+        for event in events:
+            ea = event_accumulator.EventAccumulator(run_name+'/'+event,
+                                                    size_guidance={  # see below regarding this argument
+                                                        event_accumulator.COMPRESSED_HISTOGRAMS: 500,
+                                                        event_accumulator.IMAGES: 4,
+                                                        event_accumulator.AUDIO: 4,
+                                                       event_accumulator.SCALARS: 0,
+                                                        event_accumulator.HISTOGRAMS: 1,
+                                                    })
+            ea.Reload()
+            for tag_name in tag_names:
+                if tag_name not in ea.Tags()['scalars']:
+                    continue
+                scalar = ea.Scalars(tag_name)
+                if tag_name not in d:
+                    d[tag_name] = np.array([[dp.step for dp in scalar], [dp.value for dp in scalar]])
+                else:
+                    np.concatenate((d[tag_name][0], np.array([dp.step for dp in scalar])))
+                    np.concatenate((d[tag_name][1], np.array([dp.value for dp in scalar])))
+        data += [d]
+    return data
+
+
 def plot_smooth(x, y, npts=100, order=3, *args, **kwargs):
-    x_smooth = np.linspace(x.min(), x.max(), npts)
-    tck = interpolate.splrep(x, y, s=0)
-    y_smooth = interpolate.splev(x_smooth, tck, der=0)
+    x_smooth= np.linspace(x.min(), x.max(), npts)
+    tck= interpolate.splrep(x, y, s=0)
+    y_smooth= interpolate.splev(x_smooth, tck, der=0)
     # y_smooth = spline(x, y, x_smooth, order=order)
 
     # x_smooth = x
@@ -49,16 +91,16 @@ def plot_smooth_o1(x, y, *args, **kwargs):
 
 
 def get_legend(lg_tags, run_name, lg_replace=[]):
-    lg = ""
+    lg= ""
     for lgt in lg_tags:
-        res = ".*?($|,)" if ',' not in lgt and '$' not in lgt else ''
-        mg = re.search(lgt + res, run_name)
+        res= ".*?($|,)" if ',' not in lgt and '$' not in lgt else ''
+        mg= re.search(lgt + res, run_name)
         if mg:
             lg += mg.group(0)
-    lg = lg.replace('_,', ',')
-    lg = lg.strip(',')
+    lg= lg.replace('_,', ',')
+    lg= lg.strip(',')
     for a, b in lg_replace:
-        lg = lg.replace(a, b)
+        lg= lg.replace(a, b)
     return lg
 
 
@@ -138,7 +180,7 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
     if ylim is not None:
         plt.ylim(ylim)
     # plt.xlim([0, 25000])
-    plt.legend(legends)
+    plt.legend(legends, bbox_to_anchor=(1.1, 1.05))
     plt.xlabel(xlabel[tag_name])
     plt.ylabel(ylabel[tag_name])
 
@@ -151,7 +193,7 @@ def plot_runs_and_tags(get_data_f, plot_f, logdir, patterns, tag_names,
                        fig_name, lg_tags, ylim, batch_size=None, sep_h=True,
                        ncolor=None, save_single=False, lg_replace=[],
                        no_title=False):
-    run_names = get_run_names(logdir, patterns)
+    run_names = get_run_names_events(logdir, patterns)
     data = get_data_f(logdir, run_names, tag_names, batch_size)
     if len(data) == 0:
         return data, run_names
@@ -177,7 +219,7 @@ def plot_runs_and_tags(get_data_f, plot_f, logdir, patterns, tag_names,
             yl = ylim
         if not save_single:
             plt.subplot(height, width, fi)
-        plot_tag(data, plot_f, run_names, tag_names[i], lg_tags, yl,
+        plot_tag(data, plot_f, list(run_names), tag_names[i], lg_tags, yl,
                  ncolor=ncolor, lg_replace=lg_replace, no_title=no_title)
         if save_single:
             plt.savefig('%s/%s.pdf' % (fig_dir, tag_names[i]),
