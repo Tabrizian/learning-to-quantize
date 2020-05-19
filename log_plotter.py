@@ -58,7 +58,7 @@ def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
                                                         event_accumulator.COMPRESSED_HISTOGRAMS: 500,
                                                         event_accumulator.IMAGES: 4,
                                                         event_accumulator.AUDIO: 4,
-                                                       event_accumulator.SCALARS: 0,
+                                                        event_accumulator.SCALARS: 0,
                                                         event_accumulator.HISTOGRAMS: 1,
                                                     })
             ea.Reload()
@@ -67,18 +67,24 @@ def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
                     continue
                 scalar = ea.Scalars(tag_name)
                 if tag_name not in d:
-                    d[tag_name] = np.array([[dp.step for dp in scalar], [dp.value for dp in scalar]])
+                    d[tag_name] = np.array(
+                        [[dp.step for dp in scalar], [dp.value for dp in scalar]])
                 else:
-                    np.concatenate((d[tag_name][0], np.array([dp.step for dp in scalar])))
-                    np.concatenate((d[tag_name][1], np.array([dp.value for dp in scalar])))
+                    res1 = np.concatenate(
+                        (d[tag_name][0], np.array([dp.step for dp in scalar])))
+                    res2 = np.concatenate(
+                        (d[tag_name][1], np.array([dp.value for dp in scalar])))
+                    d[tag_name] = (res1, res2)
         data += [d]
     return data
 
 
 def plot_smooth(x, y, npts=100, order=3, *args, **kwargs):
-    x_smooth= np.linspace(x.min(), x.max(), npts)
-    tck= interpolate.splrep(x, y, s=0)
-    y_smooth= interpolate.splev(x_smooth, tck, der=0)
+
+    x_smooth = np.linspace(x.min(), x.max(), npts)
+    indexes = np.argsort(x)
+    tck = interpolate.splrep(x[indexes], y[indexes], s=0)
+    y_smooth = interpolate.splev(x_smooth, tck, der=0)
     # y_smooth = spline(x, y, x_smooth, order=order)
 
     # x_smooth = x
@@ -91,16 +97,16 @@ def plot_smooth_o1(x, y, *args, **kwargs):
 
 
 def get_legend(lg_tags, run_name, lg_replace=[]):
-    lg= ""
+    lg = ""
     for lgt in lg_tags:
-        res= ".*?($|,)" if ',' not in lgt and '$' not in lgt else ''
-        mg= re.search(lgt + res, run_name)
+        res = ".*?($|,)" if ',' not in lgt and '$' not in lgt else ''
+        mg = re.search(lgt + res, run_name)
         if mg:
             lg += mg.group(0)
-    lg= lg.replace('_,', ',')
-    lg= lg.strip(',')
+    lg = lg.replace('_,', ',')
+    lg = lg.strip(',')
     for a, b in lg_replace:
-        lg= lg.replace(a, b)
+        lg = lg.replace(a, b)
     return lg
 
 
