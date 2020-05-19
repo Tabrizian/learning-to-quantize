@@ -449,6 +449,8 @@ class QuantizeMultiBucket(object):
             return q
     
     def state_dict(self):
+        if self.method == 'none':
+            return {}
         return {
             'levels': self.levels,
             'means': self.grad_dist_nb.means,
@@ -460,6 +462,8 @@ class QuantizeMultiBucket(object):
         }
     
     def load_state_dict(self, state):
+        if self.method == 'none':
+            return
         self.levels = state['levels']
         self.grad_dist_nb = CondNormalTruncHist(
             state['means'], state['sigmas'], state['norms'], -1,
@@ -468,6 +472,7 @@ class QuantizeMultiBucket(object):
         self.grad_dist_nl = TruncNorm(
             state['mean'], state['sigma'], -1,
             1, nbins=100000, bin_type='linear')
-        
+        self.qdq = QDQ(self.levels)
+
         self.error = state['error']
 
