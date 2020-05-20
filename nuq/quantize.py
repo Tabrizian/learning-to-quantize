@@ -2,11 +2,7 @@ import numpy as np
 import torch
 from cuquant import QDQ
 import math
-from estim.dist import TruncNorm, CondNormalTrunc, CondNormalTruncHist
-
-import time
-from scipy.stats import truncnorm, norm
-import scipy.integrate as integrate
+from estim.dist import TruncNorm, CondNormalTruncHist
 
 EPS = 1e-7
 
@@ -117,9 +113,7 @@ def amq_norm_less(initial_point, grad_dist, bits, lr=0.1, epochs=200):
     mean = grad_dist.mean
     sigma = grad_dist.sigma
     all_mul = []
-    iter = 0
     for epoch in range(epochs):
-        sum = 0.0
 
         def arg1_1(j):
             return mean * (j * mul ** (j - 1) + (j + 1) * mul ** j) \
@@ -139,7 +133,6 @@ def amq_norm_less(initial_point, grad_dist, bits, lr=0.1, epochs=200):
             + arg1 + sigma ** 2 * arg2
 
         mul = mul - lr * gradient
-        iter += 1
         all_mul.append(mul)
 
     return mul, all_mul
@@ -194,27 +187,6 @@ def alq(initial_levels, grad_dist, epochs, inv=False, sym=True):
     return new_levels, all_levels, losses
 
 
-def get_exp_levels(bits, multiplier):
-    """ exponential (NUQSGD)
-
-    multiplier: is used to modify levels_exp based on the number of bits
-    """
-    num_levels = 2 << bits - 1
-
-    # if bits == 2:
-    #     multiplier = 0.1
-    # elif bits == 4:
-    #     multiplier = 0.5
-    # elif bits == 6:
-    #     multiplier = 0.9
-    # elif bits == 8:
-    #     multiplier = 0.95
-    levels = sum([[-multiplier**j for j in range(num_levels >> 1)],
-                  [multiplier**j for j in reversed(range(num_levels >> 1))]],
-                 [])
-    return levels
-
-
 class QuantizeMultiBucket(object):
     def __init__(self, method, bits, bucket_size, multiplier, **kwargs):
         """
@@ -224,9 +196,8 @@ class QuantizeMultiBucket(object):
         """
         self.method = method
         self.multiplier = multiplier
-        if kwargs['interval'] != None:
+        if kwargs['interval'] is not None:
             self.interval = kwargs['interval']
-            a, b = (-self.interval - 0) / 0.1, (self.interval - 0) / 0.1
         if method == 'q':
             self.levels = get_uniform_levels(bits)
             self.norm_type = 'fro'
@@ -284,7 +255,7 @@ class QuantizeMultiBucket(object):
 
     def set_mean_variance(self, stats):
         self.mean = mean = stats['nl']['mean']
-        self.variance = variance = stats['nl']['sigma'] ** 2
+        self.variance = stats['nl']['sigma'] ** 2
         self.norms = norms = stats['nb']
         self.number_of_iterations += 1
         interval = self.interval
@@ -296,22 +267,11 @@ class QuantizeMultiBucket(object):
             mean, sigma, -interval, interval, nbins=100000, bin_type='linear')
 
         self.error = self.grad_dist_nb.estimate_variance(self.levels.cpu())
-        if self.method == 'amq':
-            np.savetxt(self.path + '/norms_mean' +
-                       str(self.number_of_iterations), np.asarray(self.norms['means']))
-            np.savetxt(self.path + '/norms_sigma' +
-                       str(self.number_of_iterations), np.asarray(self.norms['sigmas']))
-            np.savetxt(self.path + '/norms_norm' +
-                       str(self.number_of_iterations), np.asarray(self.norms['norms']))
 
     def update_levels(self):
-        interval = self.interval
-        mean = self.mean
         bits = self.bits
-        variance = self.variance
         grad_dist_nl = self.grad_dist_nl
         grad_dist_nb = self.grad_dist_nb
-        sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
         half_point = int(len(self.levels) / 2)
         quantile_levels = get_quantile_levels(bits, grad_dist_nb)
         uniform_levels = get_uniform_levels(
@@ -324,7 +284,6 @@ class QuantizeMultiBucket(object):
             inv = self.inv
             sym = self.symmetric
             epochs = self.epochs
-            initial_levels = self.levels
 
             levels_qua, _, losses_qua = alq(
                 quantile_levels, grad_dist_nl, epochs, inv, sym)
@@ -419,7 +378,10 @@ class QuantizeMultiBucket(object):
                 q = torch.zeros_like(xv)
                 r = torch.randint_like(xv, 1000001).long()
                 self.qdq.qdqGPU(xv[:-1], norm[:-1], q[:-1], r[:-1])
-                return torch.cat([q[:-1].view(-1), xv[-1][:-num_tail].view(-1)]).view(x.shape)
+                return torch.cat(
+                    [q[:-1].view(-1),
+                     xv[-1][:-num_tail].view(-1)]
+                ).view(x.shape)
             else:
                 return xv[-1][:-num_tail].view(x.shape)
         else:

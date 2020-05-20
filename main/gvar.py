@@ -18,7 +18,6 @@ from args import get_opt
 from log_utils import TBXWrapper
 from log_utils import Profiler
 from estim.optim import OptimizerFactory
-from tensorboardX import SummaryWriter
 
 tb_logger = TBXWrapper()
 
@@ -108,7 +107,9 @@ def train(tb_logger, epoch, train_loader, model, optimizer, opt, test_loader,
                 test(tb_logger,
                      model, train_test_loader, opt, optimizer.niters,
                      'Train', 'T')
-        if optimizer.niters % opt.chkpt_iter == 0 or  optimizer.niters % opt.epoch_iters == 0:
+        ischkptiter = optimizer.niters % opt.chkpt_iter == 0
+        isepochiter = optimizer.niters % opt.epoch_iters == 0
+        if ischkptiter or isepochiter:
             prec1 = test(tb_logger,
                          model, test_loader, opt, optimizer.niters)
             save_checkpoint(model, float(prec1), opt, optimizer,
