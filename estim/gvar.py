@@ -6,8 +6,6 @@ import numpy as np
 
 from estim.sgd import SGDEstimator
 from estim.nuq import NUQEstimator
-#from estim.nuq import NUQEstimatorSingleGPUParallel
-from estim.nuq import NUQEstimatorMultiGPUParallel
 
 
 class MinVarianceGradient(object):
