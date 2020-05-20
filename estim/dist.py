@@ -19,7 +19,6 @@ class Distribution:
         elif bin_type == 'log':
             bin_edges = np.logspace(self.begin, self.end, nbins)/10
             bin_edges = np.concatenate((-np.flip(bin_edges), [0], bin_edges))
-            # TODO: assumes symmetric around 0
         return bin_edges
 
     def est_var_adjacent_levels(self, left_level, right_level):
@@ -56,7 +55,6 @@ class Distribution:
         return self.ppf(inv_arg)
 
     def estimate_variance(self, levels):
-        # TODO: test this function
         var = 0
         for index, left_level in enumerate(levels[:-1]):
             right_level = levels[index+1]
@@ -209,12 +207,10 @@ class CondNormalTruncHist(Distribution):
         return self.pdf_at_centers[index]
 
     def ppf(self, cdf_at_x):
-        # TODO: I need to test
         index = bisect.bisect_right(self.cdf_bin_sum, cdf_at_x)-1
         if index == len(self.cdf_bin_sum)-1:
             # case: cdf_at_x = 1
             return 1.0
-        # TODO: should we set to self.begin or self.a?
         # special case: left edge
         x = self.bin_edges[index] if index >= 0 else self.begin
         ppf_bin_width = self.cdf_bin_sum[index+1]-self.cdf_bin_sum[index]

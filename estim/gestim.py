@@ -42,6 +42,12 @@ class GradientEstimator(object):
         return grad
 
     def _bucketize(self, grad, bs, stats_nb):
+        """Calculate the stats for a single bucket
+        Parameters:
+            grad (torch.Tensor): gradient vector
+            bs (int): bucket size
+            stats_nb (dict): dictionary containing norm-based statistics
+        """
         ig_sm_bkts = self.opt.nuq_ig_sm_bkts
         variance = 0
         num_params = 0
@@ -54,7 +60,6 @@ class GradientEstimator(object):
             norm = current_bk.norm()
             current_bk = current_bk / norm
             b_len = len(current_bk)
-            # TODO: REMOVE THIS LINE
             if b_len != bs and ig_sm_bkts:
                 continue
             num_params += b_len
@@ -71,6 +76,8 @@ class GradientEstimator(object):
         return tot_sum, variance, num_params
 
     def snap_online_mean(self, model):
+        """Sample the model and calculate the stats
+        """
 
         stats_nb = {
             'means': [],
@@ -108,6 +115,8 @@ class GradientEstimator(object):
         stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()
         stats_nb['sigmas'] = torch.stack(stats_nb['sigmas']).cpu().tolist()
         stats_nb['norms'] = torch.stack(stats_nb['norms']).cpu().tolist()
+
+        # Select the most significant norms
         if len(stats_nb['means']) > self.opt.dist_num:
             indexes = np.argsort(-np.asarray(stats_nb['norms']))[
                 :self.opt.dist_num]
@@ -130,6 +139,8 @@ class GradientEstimator(object):
         raise NotImplementedError('grad not implemented')
 
     def _normalize(self, layer, bucket_size, nocat=False):
+        """normalize the single layer
+        """
         normalized = []
         num_bucket = int(np.ceil(len(layer) / bucket_size))
         for bucket_i in range(num_bucket):
@@ -145,7 +156,6 @@ class GradientEstimator(object):
 
     def grad_estim(self, model):
         # ensuring continuity of data seen in training
-        # TODO: make sure sub-classes never use any other data_iter, e.g. raw
         dt = self.data_iter
         self.data_iter = self.estim_iter
         ret = self.grad(model)
@@ -184,7 +194,9 @@ class GradientEstimator(object):
         return Ege, var_e, snr_e, nv_e
 
     def _flatten_lb_sep(self, gradient, bs=None):
-        # flatten layer based and handle weights and bias separately
+        """ flatten layer-based and handle weights and bias separately
+        layer-based means that it will not flatten beyond a layer
+        """
         flatt_params = [], []
 
         for layer in gradient:
@@ -249,6 +261,14 @@ class GradientEstimator(object):
         return torch.cat(flatt_params)
 
     def unflatten(self, gradient, parameters, tensor=False):
+        """Change the shape of the gradient to the shape of the parameters
+
+        Parameters:
+            gradient: flattened gradient
+            parameters: convert the flattened gradient to the unflattened
+                        version
+            tensor: convert to tonsor
+        """
         shaped_gradient = []
         begin = 0
         for layer in parameters:
@@ -304,12 +324,3 @@ class GradientEstimator(object):
 
     def load_state_dict(self, state):
         pass
-
-    def snap_model(self, model):
-        logging.info('Snap Model')
-        if self.model is None:
-            self.model = copy.deepcopy(model)
-            return
-        # update sum
-        for m, s in zip(model.parameters(), self.model.parameters()):
-            s.data.copy_(m.data)
