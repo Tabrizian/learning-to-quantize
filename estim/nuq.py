@@ -25,6 +25,8 @@ class NUQEstimator(GradientEstimator):
         self.qdq.load_state_dict(state['qdq'])
 
     def grad(self, model_new, in_place=False):
+        """Calculate the quantized gradient
+        """
         model = model_new
         ig_sm_bkts = self.opt.nuq_ig_sm_bkts
 
@@ -45,13 +47,18 @@ class NUQEstimator(GradientEstimator):
 
             per_layer = not self.opt.nuq_layer
             with torch.no_grad():
+                # quantize network-wide
                 if not per_layer:
+                    # flatten the layer globally
                     flatt_grad = self._flatten(grad)
+                    # quantize the gradient
                     flatt_grad_q = self.qdq.quantize(flatt_grad, ig_sm_bkts)
+                    # unflatten the gradient and add to accumulation
                     grad_like_q = self.unflatten(flatt_grad_q, grad)
                     for g, a in zip(grad_like_q, self.acc_grad):
                         a += g / self.ngpu
 
+                # quantize layer-wise
                 else:
                     for g, a in zip(grad, self.acc_grad):
                         a += self.qdq.quantize(g, ig_sm_bkts) / self.ngpu
