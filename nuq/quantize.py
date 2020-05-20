@@ -39,6 +39,16 @@ def get_exp_levels(bits, multiplier=0.5):
 
 
 def finite_diff_gradient_descent(f, begin, end, x0=None, niters=10, lr=1):
+    """Find the local minima using gradient descent
+
+    Parameters:
+        f (function): Function to find the local minima
+        begin (int): beginning of the interval
+        end (int): end of interval
+        x0 (int): initial point
+        niters (int): number of iterations
+        lr: learning rate
+    """
     eps = (end-begin)/1000
     if x0 is None:
         x0 = (begin + end) / 2
@@ -50,6 +60,14 @@ def finite_diff_gradient_descent(f, begin, end, x0=None, niters=10, lr=1):
 
 
 def bisection(begin, end, f):
+    """Find the root using the bisection
+    method.
+
+    Parameters:
+        begin (int): beginning of the interval
+        end (int): end of the interval
+        f (function): funciton to find the root for
+    """
     x = (begin + end) / 2
     if (np.abs(f(x) - 0) < 1e-7):
         return x
@@ -66,6 +84,16 @@ def bisection(begin, end, f):
 
 
 def amq_norm_based(initial_point, grad_dist, bits, lr=0.1, epochs=50):
+    """AMQ Norm-based implementation
+
+    Parameters:
+        initial_point (int): the initial multiplier
+        grad_dist (dist.Distribution): is the distribution
+        bits (int): number of bits
+        lr (float): learning rate
+        epochs (int): number of epochs
+    """
+
     mul = initial_point
     s = 2 ** (bits - 1) - 1
     all_mul = []
@@ -106,6 +134,16 @@ def amq_norm_based(initial_point, grad_dist, bits, lr=0.1, epochs=50):
 
 
 def amq_norm_less(initial_point, grad_dist, bits, lr=0.1, epochs=200):
+    """AMQ Norm-less implementation
+
+    Parameters:
+        initial_point (int): the initial multiplier
+        grad_dist (dist.Distribution): is the distribution
+        bits (int): number of bits
+        lr (float): learning rate
+        epochs (int): number of epochs
+    """
+
     mul = initial_point
     s = 2 ** (bits - 1) - 1
     mean = grad_dist.mean
@@ -137,6 +175,15 @@ def amq_norm_less(initial_point, grad_dist, bits, lr=0.1, epochs=200):
 
 
 def alq(initial_levels, grad_dist, epochs, inv=False, sym=True):
+    """ALQ algorithm implementation.
+    Parameters:
+        grad_dist (dist.Distribution): is the distribution
+        epochs (int): number of epochs
+        inv (bool): if inv is enabled it uses inverse method
+                    instead of gradient descent
+        sym (bool): use symmetric levels
+    """
+
     losses = []
     # Assuming last level is 1, setting first dummy level to 0
     if sym:
@@ -187,8 +234,7 @@ def alq(initial_levels, grad_dist, epochs, inv=False, sym=True):
 
 class QuantizeMultiBucket(object):
     def __init__(self, method, bits, bucket_size, multiplier, **kwargs):
-        """
-        QSGD: qdqL2 + levels_uni
+        """QSGD: qdqL2 + levels_uni
         NUQSGD: qdqL2 + levels_exp
         QSGD-inf: qdqLinf + levels_uni
         """
@@ -205,14 +251,6 @@ class QuantizeMultiBucket(object):
         elif method == 'qinf':
             self.levels = get_uniform_levels(bits)
             self.norm_type = float('inf')
-        elif method == 'nuq2':
-            self.levels = get_quantile_levels(
-                bits, 0, 0.1, -self.interval, self.interval)
-            self.norm_type = 'fro'
-        elif method == 'nuq2inf':
-            self.levels = get_quantile_levels(
-                bits, 0, 0.1, -self.interval, self.interval)
-            self.norm_type = float('inf')
         elif method == 'amq':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
@@ -228,9 +266,7 @@ class QuantizeMultiBucket(object):
         elif method == 'none':
             return
 
-        self.number_of_iterations = 0
-        self.gradient_samples = []
-        self.gradient_samples_overtime = []
+        # store the previous best multiplier
         self.previous_best = None
 
         self.bucket_size = bucket_size
@@ -251,7 +287,7 @@ class QuantizeMultiBucket(object):
         self.mean = mean = stats['nl']['mean']
         self.variance = stats['nl']['sigma'] ** 2
         self.norms = norms = stats['nb']
-        self.number_of_iterations += 1
+
         interval = self.interval
         sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
         self.grad_dist_nb = CondNormalTruncHist(
@@ -263,6 +299,9 @@ class QuantizeMultiBucket(object):
         self.error = self.grad_dist_nb.estimate_variance(self.levels.cpu())
 
     def update_levels(self):
+        """Main function to update the levels
+        """
+
         bits = self.bits
         grad_dist_nl = self.grad_dist_nl
         grad_dist_nb = self.grad_dist_nb
@@ -279,6 +318,7 @@ class QuantizeMultiBucket(object):
             sym = self.symmetric
             epochs = self.epochs
 
+            # Try various initializations and pick the best one
             levels_qua, _, losses_qua = alq(
                 quantile_levels, grad_dist_nl, epochs, inv, sym)
             levels_uniform, _, losses_uni = alq(
@@ -287,8 +327,11 @@ class QuantizeMultiBucket(object):
                 exp_levels, grad_dist_nl, epochs, inv, sym)
             candidate_levels = np.asarray(
                 [levels_qua, levels_uniform, levels_exp])
+
             candidate_losses = np.asarray(
                 [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+
+            # Select the minimum loss
             self.levels = candidate_levels[np.argsort(candidate_losses)][0]
 
         elif self.method == 'alq_nb':
@@ -354,6 +397,10 @@ class QuantizeMultiBucket(object):
         self.qdq = QDQ(self.levels)
 
     def quantize(self, x, ig_sm_bkts):
+        """The main quantization function. If ig_sm_bkts is enabled
+        the last bucket that is smaller than the bucket size is
+        ignored.
+        """
         if self.method == 'none':
             return x
         assert isinstance(x, torch.cuda.FloatTensor)
