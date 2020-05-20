@@ -147,7 +147,6 @@ def main():
 
     torch.manual_seed(opt.seed)
     if opt.cuda:
-        # TODO: remove deterministic
         torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(opt.seed)
         np.random.seed(opt.seed)
