@@ -1,10 +1,7 @@
 import torch
 import torch.nn
 import torch.multiprocessing
-import numpy as np
-import copy
 
-import math
 from args import opt_to_nuq_kwargs
 from .gestim import GradientEstimator
 from nuq.quantize import QuantizeMultiBucket
@@ -45,7 +42,6 @@ class NUQEstimator(GradientEstimator):
             data = next(self.data_iter)
             loss = model.criterion(model, data)
             grad = torch.autograd.grad(loss, model.parameters())
-            layers = len(list(model.parameters()))
 
             per_layer = not self.opt.nuq_layer
             with torch.no_grad():

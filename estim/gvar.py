@@ -1,7 +1,6 @@
 import torch
 import torch.nn
 import torch.multiprocessing
-import numpy as np
 
 
 from estim.sgd import SGDEstimator
@@ -68,9 +67,11 @@ class MinVarianceGradient(object):
                         'nb_error', self.gest.qdq.error, step=niters)
                 if self.gest.qdq.grad_dist_nl is not None:
                     tb_logger.log_value(
-                        'stats/mean', self.gest.qdq.grad_dist_nl.mean, step=niters)
+                        'stats/mean', self.gest.qdq.grad_dist_nl.mean,
+                        step=niters)
                     tb_logger.log_value(
-                        'stats/sigma', self.gest.qdq.grad_dist_nl.sigma, step=niters)
+                        'stats/sigma', self.gest.qdq.grad_dist_nl.sigma,
+                        step=niters)
 
             if self.opt.nuq_method == 'amq' or self.opt.nuq_method == 'amq_nb':
                 tb_logger.log_value('multiplier', float(

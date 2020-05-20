@@ -49,8 +49,8 @@ class OptimizerFactory(object):
         self.optimizer.zero_grad()
 
         # Frequent snaps
-        if ((self.niters - opt.gvar_start) % opt.g_osnap_iter == 0 or self.niters == 100
-                and self.niters >= opt.gvar_start):
+        oitercond = (self.niters - opt.gvar_start) % opt.g_osnap_iter == 0
+        if (oitercond or self.niters == 100 and self.niters >= opt.gvar_start):
             print(self.niters)
 
             if opt.g_estim == 'nuq' and opt.nuq_method != 'none':
@@ -61,7 +61,9 @@ class OptimizerFactory(object):
                 else:
                     gvar.gest.qdq.set_mean_variance(stats)
 
-            if opt.nuq_method == 'amq' or opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb' or opt.nuq_method == 'amq_nb':
+            isamq = opt.nuq_method == 'amq' or opt.nuq_method == 'amq_nb'
+            isalq = opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb'
+            if isamq or isalq:
                 if opt.nuq_parallel == 'ngpu':
                     for qdq in gvar.gest.qdq:
                         qdq.update_levels()

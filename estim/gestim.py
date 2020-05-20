@@ -2,8 +2,6 @@ import torch
 import torch.nn
 import torch.multiprocessing
 import numpy as np
-import math
-import random
 
 import copy
 import logging
@@ -88,9 +86,6 @@ class GradientEstimator(object):
         bs = self.opt.nuq_bucket_size
 
         lb = not self.opt.nuq_layer
-        ig_sm_bkts = self.opt.ig_sm_bkts
-
-        params = list(model.parameters())
 
         for i in range(num_of_samples):
             grad = self._get_raw_grad(model)
@@ -110,7 +105,6 @@ class GradientEstimator(object):
                 total_variance += b_var
                 total_params += b_params
 
-        nw = sum([w.numel() for w in model.parameters()])
         stats_nb['means'] = torch.stack(stats_nb['means']).cpu().tolist()
         stats_nb['sigmas'] = torch.stack(stats_nb['sigmas']).cpu().tolist()
         stats_nb['norms'] = torch.stack(stats_nb['norms']).cpu().tolist()
@@ -271,7 +265,6 @@ class GradientEstimator(object):
                                     nocat=False):
         # flatten and normalize weight and bias separately
 
-        bs = bucket_size
         # totally flat and layer-based layers
         flatt_params_lb = self._flatten_lb_sep(gradient)
 

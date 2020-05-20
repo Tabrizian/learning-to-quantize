@@ -2,7 +2,6 @@ from scipy.stats import truncnorm
 from scipy import integrate
 import numpy as np
 import bisect
-import matplotlib.pyplot as plt
 
 
 class Distribution:
@@ -28,8 +27,6 @@ class Distribution:
         # int_a^b sigma^2(r) f(r) dr
         # = sum_{ind(e_l)}^{ind(e_r)} f(r)
         #         int_{max(a,e_l)}^{min(e_r,b)} sigma^2(r) dr
-        bin_edges = self.bin_edges
-        var = 0
 
         c = left_level
         d = right_level
