@@ -6,12 +6,12 @@
 We recommend using Anaconda to install the following packages,
 
 * Python 3.7.1
-* [PyTorch](http://pytorch.org/) (=1.3.1)
+* [PyTorch](http://pytorch.org/) **(=1.3.1)**
 * TensorboardX
 * Pyyaml
 
 ```
-conda install pytorch==1.3.1 torchvision= cudatoolkit=10.1 -c pytorch
+conda install pytorch==1.3.1 torchvision cudatoolkit=10.1 -c pytorch
 ```
 
 ## Cuda kernel installation
