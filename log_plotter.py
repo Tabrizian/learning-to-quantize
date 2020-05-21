@@ -28,6 +28,7 @@ def get_run_names_events(logdir, patterns):
                 for file in files:
                     if re.match('.*events\.out.*', file):
                         run_names[root].append(file)
+                run_names[root] = sorted(run_names[root])
     # print(run_names)
     return run_names
 
@@ -70,25 +71,24 @@ def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
                     d[tag_name] = np.array(
                         [[dp.step for dp in scalar], [dp.value for dp in scalar]])
                 else:
+                    new_array = np.array([dp.step for dp in scalar])
+                    indexes = new_array > d[tag_name][0][-1]
                     res1 = np.concatenate(
-                        (d[tag_name][0], np.array([dp.step for dp in scalar])))
+                        (d[tag_name][0], np.array([dp.step for dp in scalar])[indexes]))
                     res2 = np.concatenate(
-                        (d[tag_name][1], np.array([dp.value for dp in scalar])))
+                        (d[tag_name][1], np.array([dp.value for dp in scalar])[indexes]))
                     d[tag_name] = (res1, res2)
         data += [d]
     return data
 
 
+
 def plot_smooth(x, y, npts=100, order=3, *args, **kwargs):
 
     x_smooth = np.linspace(x.min(), x.max(), npts)
-    indexes = np.argsort(x)
-    tck = interpolate.splrep(x[indexes], y[indexes], s=0)
+    tck = interpolate.splrep(x, y, s=0)
     y_smooth = interpolate.splev(x_smooth, tck, der=0)
-    # y_smooth = spline(x, y, x_smooth, order=order)
 
-    # x_smooth = x
-    # y_smooth = y
     plt.plot(x_smooth, y_smooth, *args, **kwargs)
 
 
