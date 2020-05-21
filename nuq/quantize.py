@@ -17,6 +17,11 @@ def get_quantile_levels(bits, grad_dist):
     levels[-1] = grad_dist.end
     return levels
 
+def get_uniform_levels(bits):
+    """uniform (QSGD)"""
+    num_levels = 2 << bits - 1
+    levels_uni = np.linspace(-1, 1, num=num_levels)
+    return levels_uni
 
 def get_ternary_levels():
     return np.array([-1, 0, 1])

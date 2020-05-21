@@ -10,8 +10,6 @@ class Model(nn.Module):
         model = torchvision.models.__dict__[arch](pretrained)
         if arch.startswith('alexnet') or arch.startswith('vgg'):
             model.features = torch.nn.DataParallel(model.features)
-        else:
-            model = torch.nn.DataParallel(model)
         if nclass is not None and nclass != model.module.fc.out_features:
             if arch.startswith('resnet'):
                 model.module.fc = nn.Linear(model.module.fc.in_features,
