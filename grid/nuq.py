@@ -39,6 +39,7 @@ def mnist(args):
 
     return args, log_dir, module_name, exclude
 
+
 def cifar10_full_resnet110(args):
     dataset = 'cifar10'
     module_name = 'main.gvar'
@@ -90,6 +91,7 @@ def cifar10_full_resnet110(args):
             ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7), ('nuq_amq_epochs', 40)])),
             ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
             'qinf',
+            'trn',
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', ''), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', '')])),
@@ -110,6 +112,7 @@ def cifar10_full_resnet110(args):
     args += [OrderedDict(shared_args+gvar_args+args_super_sgd)]
 
     return args, log_dir, module_name, exclude
+
 
 def cifar10_full_resnet32(args):
     dataset = 'cifar10'
@@ -162,6 +165,7 @@ def cifar10_full_resnet32(args):
             ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7), ('nuq_amq_epochs', 40)])),
             ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
             'qinf',
+            'trn',
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', ''), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', '')])),
@@ -182,6 +186,7 @@ def cifar10_full_resnet32(args):
     args += [OrderedDict(shared_args+gvar_args+args_super_sgd)]
 
     return args, log_dir, module_name, exclude
+
 
 def imagenet_half(args):
     dataset = 'imagenet'
@@ -240,6 +245,7 @@ def imagenet_half(args):
             ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7)])),
             ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
             'qinf',
+            'trn',
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', ''), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', '')])),
@@ -260,6 +266,7 @@ def imagenet_half(args):
     args += [OrderedDict(shared_args+gvar_args+args_super_sgd)]
 
     return args, log_dir, module_name, exclude
+
 
 def imagenet_full(args):
     dataset = 'imagenet'
@@ -318,6 +325,7 @@ def imagenet_full(args):
             ('amq_nb', OrderedDict([('nuq_amq_lr', 0.7)])),
             ('alq', OrderedDict([('nuq_cd_epochs', 30)])),
             'qinf',
+            'trn',
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', ''), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_inv', '')])),
             ('alq_nb', OrderedDict([('nuq_cd_epochs', 30), ('nuq_sym', '')])),
