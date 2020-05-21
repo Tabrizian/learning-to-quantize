@@ -76,7 +76,7 @@ class GradientEstimator(object):
         return tot_sum, variance, num_params
 
     def snap_online_mean(self, model):
-        """Sample the model and calculate the stats
+        """Sample the gradient and calculate the stats
         """
 
         stats_nb = {
@@ -139,7 +139,7 @@ class GradientEstimator(object):
         raise NotImplementedError('grad not implemented')
 
     def _normalize(self, layer, bucket_size, nocat=False):
-        """normalize the single layer
+        """normalize gradients of a single layer
         """
         normalized = []
         num_bucket = int(np.ceil(len(layer) / bucket_size))
@@ -193,65 +193,15 @@ class GradientEstimator(object):
         nv_e = sum([(nn/(ss+1e-7)).sum() for ss, nn in zip(Es, En)])/nw
         return Ege, var_e, snr_e, nv_e
 
-    def _flatten_lb_sep(self, gradient, bs=None):
-        """ flatten layer-based and handle weights and bias separately
-        layer-based means that it will not flatten beyond a layer
-        """
-        flatt_params = [], []
-
-        for layer in gradient:
-            if len(layer.size()) == 1:
-                if bs is None:
-                    flatt_params[0].append(
-                        torch.flatten(layer))
-                else:
-                    buckets = []
-                    flatt = torch.flatten(layer)
-                    num_bucket = int(np.ceil(len(flatt) / bs))
-                    for bucket_i in range(num_bucket):
-                        start = bucket_i * bs
-                        end = min((bucket_i + 1) * bs, len(flatt))
-                        x_bucket = flatt[start:end].clone()
-                        buckets.append(x_bucket)
-                    flatt_params[0].append(
-                        buckets)
-            else:
-                if bs is None:
-                    flatt_params[1].append(
-                        torch.flatten(layer))
-                else:
-                    buckets = []
-                    flatt = torch.flatten(layer)
-                    num_bucket = int(np.ceil(len(flatt) / bs))
-                    for bucket_i in range(num_bucket):
-                        start = bucket_i * bs
-                        end = min((bucket_i + 1) * bs, len(flatt))
-                        x_bucket = flatt[start:end].clone()
-                        buckets.append(x_bucket)
-                    flatt_params[1].append(
-                        buckets)
-        return flatt_params
-
     def _flatten_lb(self, gradient):
-        # flatten layer based
+        """flatten the gradient in every layer
+        """
         flatt_params = []
 
         for layer_parameters in gradient:
             flatt_params.append(torch.flatten(layer_parameters))
 
         return flatt_params
-
-    def _flatten_sep(self, gradient, bs=None):
-        # flatten weights and bias separately
-        flatt_params = [], []
-
-        for layer_parameters in gradient:
-            if len(layer_parameters.size()) == 1:
-                flatt_params[0].append(
-                    torch.flatten(layer_parameters))
-            else:
-                flatt_params[1].append(torch.flatten(layer_parameters))
-        return torch.cat(flatt_params[0]), torch.cat(flatt_params[1])
 
     def _flatten(self, gradient):
         flatt_params = []
@@ -267,7 +217,7 @@ class GradientEstimator(object):
             gradient: flattened gradient
             parameters: convert the flattened gradient to the unflattened
                         version
-            tensor: convert to tonsor
+            tensor: convert to tonsor otherwise it will be an array
         """
         shaped_gradient = []
         begin = 0
@@ -280,23 +230,6 @@ class GradientEstimator(object):
             return torch.stack(shaped_gradient)
         else:
             return shaped_gradient
-
-    def _flatt_and_normalize_lb_sep(self, gradient, bucket_size=1024,
-                                    nocat=False):
-        # flatten and normalize weight and bias separately
-
-        # totally flat and layer-based layers
-        flatt_params_lb = self._flatten_lb_sep(gradient)
-
-        normalized_buckets_lb = [], []
-
-        for bias in flatt_params_lb[0]:
-            normalized_buckets_lb[0].append(
-                self._normalize(bias, bucket_size, nocat))
-        for weight in flatt_params_lb[1]:
-            normalized_buckets_lb[1].append(
-                self._normalize(weight, bucket_size, nocat))
-        return normalized_buckets_lb
 
     def _flatt_and_normalize_lb(self, gradient, bucket_size=1024, nocat=False):
         flatt_params_lb = self._flatten_lb(gradient)
@@ -311,13 +244,6 @@ class GradientEstimator(object):
         flatt_params = self._flatten(gradient)
 
         return self._normalize(flatt_params, bucket_size, nocat)
-
-    def _flatt_and_normalize_sep(self, gradient,
-                                 bucket_size=1024, nocat=False):
-        flatt_params = self._flatten_sep(gradient)
-
-        return [self._normalize(flatt_params[0], bucket_size, nocat),
-                self._normalize(flatt_params[1], bucket_size, nocat)]
 
     def state_dict(self):
         return {}
