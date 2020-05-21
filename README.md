@@ -35,7 +35,7 @@ Each file in the pjobs folder contains all of the experiments for a single job.
 By changing the [grid/nuq.py](./grid/nuq.py) you can create a different set of experiments.
 
 ```bash
-grid_run.py --prefix exp --cluster slurm --run_name cifar10_full_resnet32 --grid nuq --cluster_args 38,1,p100```
+grid_run.py --prefix exp --cluster slurm --run_name cifar10_full_resnet32 --grid nuq --cluster_args 38,1,p100
 ```
 
 This generates a set of experiments prefixed with `exp` and generates the required `sbatch` file for submitting to SLURM in the `jobs/exp_slurm.sbatch`. It may require minor changes to suit your environment. About the `cluster_args`, the first parameter shows the total number of bash scripts to generate that may contain multiple experiments. Generated bash scripts will be located in `jobs/exp_{0-37}`.
