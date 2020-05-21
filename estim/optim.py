@@ -53,7 +53,7 @@ class OptimizerFactory(object):
         every = int(opt.g_osnap_iter.split(',')[-1])
         oitercond = (self.niters - opt.gvar_start) % every == 0
 
-        if ((oitercon or self.niters in inits)
+        if ((oitercond or self.niters in inits)
                 and self.niters >= opt.gvar_start):
             print(self.niters)
 

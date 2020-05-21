@@ -17,14 +17,9 @@ def get_quantile_levels(bits, grad_dist):
     levels[-1] = grad_dist.end
     return levels
 
+
 def get_ternary_levels():
     return np.array([-1, 0, 1])
-
-def get_uniform_levels(bits):
-    """uniform (QSGD)"""
-    num_levels = 2 << bits - 1
-    levels_uni = np.linspace(-1, 1, num=num_levels)
-    return levels_uni
 
 
 def get_exp_levels(bits, multiplier=0.5):
@@ -398,7 +393,6 @@ class QuantizeMultiBucket(object):
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
             self.levels = get_exp_levels(self.bits, self.multiplier)
-
 
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
