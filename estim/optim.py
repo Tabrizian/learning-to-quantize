@@ -49,7 +49,10 @@ class OptimizerFactory(object):
         self.optimizer.zero_grad()
 
         # Frequent snaps
-        if ((self.niters - opt.gvar_start) % opt.g_osnap_iter == 0 or self.niters == 100
+        inits = list(map(int, opt.g_osnap_iter.split(',')[0:2]))
+        every = int(opt.g_osnap_iter.split(',')[-1])
+
+        if (((self.niters - opt.gvar_start) % every == 0 or self.niters in inits)
                 and self.niters >= opt.gvar_start):
             print(self.niters)
 
