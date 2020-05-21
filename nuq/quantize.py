@@ -18,6 +18,10 @@ def get_quantile_levels(bits, grad_dist):
     return levels
 
 
+def get_ternary_levels():
+    return np.array([-1, 0, 1])
+
+
 def get_uniform_levels(bits):
     """uniform (QSGD)"""
     num_levels = 2 << bits - 1
@@ -263,6 +267,10 @@ class QuantizeMultiBucket(object):
         elif method == 'alq_nb':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
+        elif method == 'trn':
+            self.levels = get_ternary_levels()
+            self.norm_type = float('inf')
+
         elif method == 'none':
             return
 
