@@ -21,6 +21,9 @@ def get_quantile_levels(bits, grad_dist):
     levels[-1] = grad_dist.end
     return levels
 
+def get_ternary_levels():
+    return np.array([-1, 0, 1])
+
 def get_uniform_levels(bits):
     """uniform (QSGD)"""
     num_levels = 2 << bits - 1
@@ -283,6 +286,10 @@ class QuantizeMultiBucket(object):
         elif method == 'alq_nb':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
+        elif method == 'trn':
+            self.levels = get_ternary_levels()
+            self.norm_type = float('inf')
+
         elif method == 'none':
             return
 
@@ -417,6 +424,7 @@ class QuantizeMultiBucket(object):
             self.multiplier = optimal_points[index]
             self.previous_best = self.multiplier
             self.levels = get_exp_levels(self.bits, self.multiplier)
+
 
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
