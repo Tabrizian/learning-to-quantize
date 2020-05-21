@@ -94,7 +94,7 @@ def add_args():
     parser.add_argument('--g_optim_start',
                         default=argparse.SUPPRESS, type=int)
     parser.add_argument('--g_osnap_iter',
-                        default=argparse.SUPPRESS, type=int)
+                        default='100,1000,10000', type=str)
     parser.add_argument('--g_bsnap_iter',
                         default=argparse.SUPPRESS, type=int)
     parser.add_argument('--g_epoch',

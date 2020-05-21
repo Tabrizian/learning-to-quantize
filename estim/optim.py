@@ -49,8 +49,12 @@ class OptimizerFactory(object):
         self.optimizer.zero_grad()
 
         # Frequent snaps
-        oitercond = (self.niters - opt.gvar_start) % opt.g_osnap_iter == 0
-        if (oitercond or self.niters == 100 and self.niters >= opt.gvar_start):
+        inits = list(map(int, opt.g_osnap_iter.split(',')[:-1]))
+        every = int(opt.g_osnap_iter.split(',')[-1])
+        oitercond = (self.niters - opt.gvar_start) % every == 0
+
+        if (oitercond or self.niters in inits) and \
+           self.niters >= opt.gvar_start:
             print(self.niters)
 
             if opt.g_estim == 'nuq' and opt.nuq_method != 'none':
