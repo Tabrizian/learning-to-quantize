@@ -9,7 +9,7 @@ def args():
     parser.add_argument('--pattern', type=str)
     parser.add_argument('--show', action='store_true')
     parser.add_argument('--num', type=int, default=10)
-    return parser.parse_args()
+    return parser.parse_args() 
 
 def print_logs(outputs, opt):
     sorted_index = np.argsort(outputs['number'])
@@ -47,9 +47,15 @@ if __name__ == '__main__':
         outputs['number'].append(number)
         f = open(run_name + '/log.txt', 'r')
         lines = f.read().splitlines()
+        lines.reverse()
         f.close()
 
-        last_line = lines[-1].split(' ')
+        for last_line in lines:
+            if len(last_line.split(' ')) > 1:
+                last_line = last_line.split(' ')
+                break
+
+
         if len(last_line) > 1:
             outputs['date'].append(' '.join([last_line[0], last_line[1]]))
         else:
@@ -59,4 +65,5 @@ if __name__ == '__main__':
         f = open(run_name + '/log', 'r')
         lines = f.read().splitlines()
         outputs['logs'].append('\n'.join(lines[-num:]))
+
     print_logs(outputs, opt)
