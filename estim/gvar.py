@@ -107,5 +107,5 @@ class MinVarianceGradient(object):
     def state_dict(self):
         return self.gest.state_dict()
 
-    def load_state_dict(self, state):
-        self.gest.load_state_dict(state)
+    def load_state_dict(self, state, model):
+        self.gest.load_state_dict(state, model)

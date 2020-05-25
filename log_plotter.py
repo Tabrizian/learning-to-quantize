@@ -50,8 +50,10 @@ def get_data_pth(logdir, run_names, tag_names, batch_size=None):
 
 def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
     data = []
+    all_points = []
     for run_name, events in run_names.items():
         d = {}
+        points = {}
 
         for event in events:
             ea = event_accumulator.EventAccumulator(run_name+'/'+event,
@@ -70,6 +72,7 @@ def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
                 if tag_name not in d:
                     d[tag_name] = np.array(
                         [[dp.step for dp in scalar], [dp.value for dp in scalar]])
+                    points[tag_name] = [len(d[tag_name][0]) - 1]
                 else:
                     new_array = np.array([dp.step for dp in scalar])
                     indexes = new_array > d[tag_name][0][-1]
@@ -77,23 +80,29 @@ def get_data_pth_events(logdir, run_names, tag_names, batch_size=None):
                         (d[tag_name][0], np.array([dp.step for dp in scalar])[indexes]))
                     res2 = np.concatenate(
                         (d[tag_name][1], np.array([dp.value for dp in scalar])[indexes]))
+                    points[tag_name].append(len(res2) - 1)
                     d[tag_name] = (res1, res2)
+                
         data += [d]
-    return data
+        all_points += [points]
+    return data, all_points
 
 
 
-def plot_smooth(x, y, npts=100, order=3, *args, **kwargs):
+def plot_smooth(x, y, npts=100, order=3, points=None, *args, **kwargs):
+    points = np.array(points, dtype=int)
+    #plt.plot(x[points], y[points], 'o',  )
 
     x_smooth = np.linspace(x.min(), x.max(), npts)
-    tck = interpolate.splrep(x, y, s=0)
+    tck = interpolate.splrep(x, y, k=order)
     y_smooth = interpolate.splev(x_smooth, tck, der=0)
 
-    plt.plot(x_smooth, y_smooth, *args, **kwargs)
+    plt.plot(x_smooth, y_smooth, *args, **kwargs, markevery=[2], ms=4)
+    plt.ticklabel_format(axis="x", style="sci", scilimits=None)
 
 
-def plot_smooth_o1(x, y, *args, **kwargs):
-    plot_smooth(x, y, 100, 1, *args, **kwargs)
+def plot_smooth_o1(x, y, points=None, *args, **kwargs):
+    plot_smooth(x, y, 100, 1, points, *args, **kwargs)
 
 
 def get_legend(lg_tags, run_name, lg_replace=[]):
@@ -111,7 +120,7 @@ def get_legend(lg_tags, run_name, lg_replace=[]):
 
 
 def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
-             ncolor=None, lg_replace=[], no_title=False):
+             ncolor=None, lg_replace=[], no_title=False, points=None):
     xlabel = {}
     ylabel = {'Tacc': 'Training Accuracy (%)', 'Terror': 'Training Error (%)',
               'train/accuracy': 'Training Accuracy (%)',
@@ -121,7 +130,7 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
               'epoch': 'Epoch',
               'Tloss': 'Loss', 'Vloss': 'Loss', 'lr': 'Learning rate',
               'grad_bias': 'Gradient Diff norm',
-              'est_var': 'Mean variance',
+              'est_var': 'Average Variance',
               'est_snr': 'Mean SNR',
               'nb_error': 'NB Error',
               'est_nvar': 'Mean Normalized Variance'}
@@ -134,11 +143,11 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
               'Vloss': 'Loss on validation set',
               'grad_bias': 'Optimization Step Bias',
               'nb_error': 'Norm-based Variance Error',
-              'est_var': 'Optimization Step Variance (w/o learning rate)',
+              'est_var': 'Optimization Step Variance',
               'est_snr': 'Optimization Step SNR',
               'est_nvar': 'Optimization Step Normalized Variance (w/o lr)',
               }
-    yscale_log = ['Tloss', 'Vloss', 'est_var']  # , 'est_var'
+    yscale_log = ['Tloss', 'Vloss', 'est_var', 'Vacc']  # , 'est_var'
     yscale_base = []
     # yscale_sci = ['est_bias', 'est_var']
     plot_fs = {'Tacc': plot_f, 'Vacc': plot_f,
@@ -168,7 +177,7 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
             continue
         legends += [get_legend(lg_tags, run_names[i], lg_replace)]
         plot_fs[tag_name](
-            data[i][tag_name][0], data[i][tag_name][1],
+            data[i][tag_name][0], data[i][tag_name][1], points[i][tag_name],
             linestyle=style[(color0 + i) // len(color)],
             color=color[(color0 + i) % len(color)], linewidth=2)
     if not no_title:
@@ -183,10 +192,11 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
     else:
         ax = plt.gca()
         ax.ticklabel_format(axis='y', style='sci', scilimits=(-3, 3))
+    ax.ticklabel_format(axis='x', style='sci', scilimits=(0, 0))
     if ylim is not None:
         plt.ylim(ylim)
-    # plt.xlim([0, 25000])
-    plt.legend(legends, bbox_to_anchor=(1.1, 1.05))
+    # plt.xlim([0, 300*1e3])
+    plt.legend(legends, loc="upper left", bbox_to_anchor=(1.01, 1.0), prop={'size': 12})
     plt.xlabel(xlabel[tag_name])
     plt.ylabel(ylabel[tag_name])
 
@@ -194,13 +204,12 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
 def ticks(y, pos):
     return r'$e^{{{:.0f}}}$'.format(np.log(y))
 
-
 def plot_runs_and_tags(get_data_f, plot_f, logdir, patterns, tag_names,
                        fig_name, lg_tags, ylim, batch_size=None, sep_h=True,
                        ncolor=None, save_single=False, lg_replace=[],
                        no_title=False):
     run_names = get_run_names_events(logdir, patterns)
-    data = get_data_f(logdir, run_names, tag_names, batch_size)
+    data, points = get_data_f(logdir, run_names, tag_names, batch_size)
     if len(data) == 0:
         return data, run_names
     num = len(tag_names)
@@ -226,7 +235,7 @@ def plot_runs_and_tags(get_data_f, plot_f, logdir, patterns, tag_names,
         if not save_single:
             plt.subplot(height, width, fi)
         plot_tag(data, plot_f, list(run_names), tag_names[i], lg_tags, yl,
-                 ncolor=ncolor, lg_replace=lg_replace, no_title=no_title)
+                 ncolor=ncolor, lg_replace=lg_replace, no_title=no_title, points=points)
         if save_single:
             plt.savefig('%s/%s.pdf' % (fig_dir, tag_names[i]),
                         dpi=100, bbox_inches='tight')

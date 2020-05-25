@@ -176,10 +176,10 @@ def main():
             print("=> loading checkpoint '{}'".format(model_path))
             checkpoint = torch.load(model_path)
             best_prec1 = checkpoint['best_prec1']
-            optimizer.gvar.load_state_dict(checkpoint['gvar'])
             optimizer.niters = checkpoint['niters']
             epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['model'])
+            optimizer.gvar.load_state_dict(checkpoint['gvar'], model)
             save_checkpoint.best_prec1 = best_prec1
             print("=> loaded checkpoint '{}' (epoch {}, best_prec {})"
                   .format(model_path, epoch, best_prec1))

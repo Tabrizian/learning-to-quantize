@@ -20,9 +20,12 @@ class NUQEstimator(GradientEstimator):
             'qdq': self.qdq.state_dict()
         }
 
-    def load_state_dict(self, state):
-        print(state)
-        self.qdq.load_state_dict(state['qdq'])
+    def load_state_dict(self, state, model):
+        if self.opt.nuq_method == 'none':
+            return
+        stats = self.snap_online_mean(model)
+        self.qdq.set_mean_variance(stats)
+        self.qdq.update_levels()
 
     def grad(self, model_new, in_place=False):
         """Calculate the quantized gradient
