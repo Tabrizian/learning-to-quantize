@@ -9,6 +9,7 @@ We recommend using Anaconda to install the following packages,
 * [PyTorch](http://pytorch.org/) **(=1.3.1)**
 * TensorboardX
 * Pyyaml
+* Scipy
 
 ```
 conda install pytorch==1.3.1 torchvision cudatoolkit=10.1 -c pytorch
