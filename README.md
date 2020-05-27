@@ -51,7 +51,7 @@ This functionality is mainly implemented in three files:
 
 ### [estim/dist.py](estim/dist.py)
 
-This files implements the necessary distribution classes. Two of the classes are used throughout the project:
+This file implements the necessary distribution classes. Two of the classes are used throughout the project:
 
 1. `TruncNorm`
 
