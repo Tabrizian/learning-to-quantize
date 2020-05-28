@@ -85,6 +85,52 @@ class Distribution:
     def cdf(self, x):
         raise NotImplementedError('CDF has not been implemented.')
 
+class HistDistribution(Distribution):
+
+    def __init__(self, cdf_f, begin=-1, end=+1, nbins=1000, bin_type='linear'):
+        super().__init__(begin=begin, end=end, nbins=nbins, bin_type=bin_type)
+        self.cdf_f = cdf_f
+        self.pdf_bin_sum = self._quantized_sum_pdf()
+        self.cdf_bin_sum = np.cumsum(self.pdf_bin_sum).clip(0, 1)
+
+    def cdf(self, x):
+        index = bisect.bisect_right(self.bin_edges, x)-1
+        if index == len(self.bin_edges)-1:
+            # case: x=self.end
+            return 1.0
+        cdf_at_x = self.cdf_bin_sum[index-1] if index > 0 else 0
+        weight = (x-self.bin_edges[index])/self.bin_width[index]
+        cdf_at_x += weight*self.pdf_bin_sum[index]
+        return cdf_at_x
+
+    def pdf(self, x):
+        index = bisect.bisect_right(self.bin_edges, x)-1
+        if index == len(self.pdf_at_centers):
+            return 0.0
+        return self.pdf_at_centers[index]
+
+    def ppf(self, cdf_at_x):
+        index = bisect.bisect_right(self.cdf_bin_sum, cdf_at_x)-1
+        if index == len(self.cdf_bin_sum)-1:
+            # case: cdf_at_x = 1
+            return 1.0
+        # special case: left edge
+        x = self.bin_edges[index] if index >= 0 else self.begin
+        ppf_bin_width = self.cdf_bin_sum[index+1]-self.cdf_bin_sum[index]
+        weight = (cdf_at_x-self.cdf_bin_sum[index])/ppf_bin_width
+        x += weight*self.bin_width[index]
+        return x
+
+    def _quantized_sum_pdf(self):
+        bin_edges = self.bin_edges
+        cdf_f = self.cdf_f
+        pdf_bin_sum = 0
+        cdfa = cdf_f(bin_edges[:-1])
+        cdfb = cdf_f(bin_edges[1:])
+        pdfb = cdfb-cdfa
+        pdfb /= pdfb.sum()
+        return pdfb
+
 
 class TruncNorm(Distribution):
 
@@ -154,21 +200,32 @@ class CondNormalTruncHist(Distribution):
     def __init__(self, means, sigmas, norms, begin=-1, end=+1, nbins=100,
                  bin_type='linear'):
         super().__init__(begin, end, nbins, bin_type)
-        self.means = np.asarray(means)
-        self.sigmas = np.asarray(sigmas)
+        mu = self.means = np.asarray(means)
+        sigma = self.sigmas = np.asarray(sigmas)
+        bin_edges = self.bin_edges
         self.norms = np.asarray(norms)
         self.begin = begin
         self.end = end
         self.nbins = nbins
         self.total_norm = np.sum(self.norms)
-        self.a = (begin - self.means) / self.sigmas
-        self.b = (end - self.means) / self.sigmas
+        a_vals = self.a = (begin - self.means) / self.sigmas
+        b_vals = self.b = (end - self.means) / self.sigmas
         self.coeff = self.norms / self.total_norm
+
+        def cdf_f(x):
+            from scipy import stats
+            cdf_val = 0.0
+            for m, s, n, a_val, b_val in zip(mu, sigma, norms, a_vals, b_vals):
+                coeff = n / self.total_norm
+                cdf_val += coeff * stats.truncnorm.cdf(x, loc=m, scale=s,
+                                                       a=a_val, b=b_val)
+            return cdf_val
 
         self.pdf_bin_sum = self._quantized_sum_pdf()
         self.cdf_bin_sum = np.cumsum(self.pdf_bin_sum).clip(0, 1)
         # self.ppf_bin_width = (self.cdf_bin_sum[1:]-self.cdf_bin_sum[:-1])
         self.pdf_at_centers = self.pdf_bin_sum / self.bin_width
+        
 
     def _quantized_sum_pdf(self):
         from scipy import stats
