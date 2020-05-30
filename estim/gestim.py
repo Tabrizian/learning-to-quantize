@@ -117,7 +117,8 @@ class GradientEstimator(object):
         stats_nb['norms'] = torch.stack(stats_nb['norms']).cpu().tolist()
 
         if len(stats_nb['means']) > self.opt.dist_num:
-            indexes = np.random.choice(len(stats_nb['norms']), self.opt.dist_num)
+            indexes = np.argsort(-np.asarray(stats_nb['norms']))[
+                :self.opt.dist_num]
             stats_nb['means'] = np.array(stats_nb['means'])[indexes].tolist()
             stats_nb['sigmas'] = np.array(stats_nb['sigmas'])[
                 indexes].tolist()
@@ -246,5 +247,5 @@ class GradientEstimator(object):
     def state_dict(self):
         return {}
 
-    def load_state_dict(self, state):
+    def load_state_dict(self, state, model):
         pass
