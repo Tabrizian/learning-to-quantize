@@ -121,8 +121,17 @@ def get_legend(lg_tags, run_name, lg_replace=[]):
         lg = lg.replace(a, b)
     return lg
 
-class OOMFormater(mtick.ScalarFormatter):
+class OOMFormatter(mtick.ScalarFormatter):
+    def __init__(self, useOffset=None, useMathText=None, useLocale=None, acc_bits=None):
+        super().__init__(useOffset=useOffset, useMathText=useMathText, useLocale=useLocale)
+        if acc_bits is not None:
+            self.acc_bits = acc_bits
+        else:
+            self.acc_bits = 3
+
+
     def _set_format(self):
+        bits = self.acc_bits
         # set the format string to format all the ticklabels
         if len(self.locs) < 2:
             # Temporarily augment the locations with the axis end points.
@@ -142,21 +151,21 @@ class OOMFormater(mtick.ScalarFormatter):
             locs = locs[:-2]
         loc_range_oom = int(math.floor(math.log10(loc_range))) 
         # first estimate:
-        sigfigs = max(0, 4 - loc_range_oom)
+        sigfigs = max(0, bits - loc_range_oom)
         # refined estimate:
-        thresh = 1e-3 * 10 ** (loc_range_oom)
+        thresh = 10 ** (-bits) * 10 ** (loc_range_oom)
         while sigfigs >= 0:
             if np.abs(locs - np.round(locs, decimals=sigfigs)).max() < thresh:
                 sigfigs -= 1
             else:
                 break
-        sigfigs += 1
+        sigfigs = bits
         self.format = '%1.' + str(sigfigs) + 'f'
         if self._usetex or self._useMathText:
             self.format = r'$\mathdefault{%s}$' % self.format
 
 def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
-             ncolor=None, lg_replace=[], no_title=False, points=None, xlim=None, vlines=None, orders=None):
+             ncolor=None, lg_replace=[], no_title=False, points=None, xlim=None, vlines=None, orders=None, acc_bits=None):
     xlabel = {}
     ylabel = {'Tacc': 'Training Accuracy (%)', 'Terror': 'Training Error (%)',
               'train/accuracy': 'Training Accuracy (%)',
@@ -237,7 +246,7 @@ def plot_tag(data, plot_f, run_names, tag_name, lg_tags, ylim=None, color0=0,
         else:
             ax.set_yscale('log')
             if tag_name in yscale_log_offset:
-                ax.yaxis.set_major_formatter(OOMFormater(useOffset=True))
+                ax.yaxis.set_major_formatter(OOMFormatter(useOffset=True, acc_bits=acc_bits))
                 ax.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
     else:
         ax = plt.gca()
@@ -282,7 +291,7 @@ def ticks_10(y, pos):
 def plot_runs_and_tags(get_data_f, plot_f, logdir, patterns, tag_names,
                        fig_name, lg_tags, ylim, batch_size=None, sep_h=True,
                        ncolor=None, save_single=False, lg_replace=[],
-                       xlim=None,
+                       xlim=None, acc_bits=None,
                        no_title=False, vlines=None, color_order=None):
     run_names = get_run_names_events(logdir, patterns)
     data, points = get_data_f(logdir, run_names, tag_names, batch_size)
@@ -311,10 +320,25 @@ def plot_runs_and_tags(get_data_f, plot_f, logdir, patterns, tag_names,
         if not save_single:
             plt.subplot(height, width, fi)
         plot_tag(data, plot_f, list(run_names), tag_names[i], lg_tags, yl,
-                 ncolor=ncolor, lg_replace=lg_replace, no_title=no_title, points=points, vlines=vlines, xlim=xlim, orders=color_order)
+                 ncolor=ncolor, lg_replace=lg_replace, no_title=no_title, points=points, vlines=vlines, xlim=xlim, orders=color_order,
+                 acc_bits=acc_bits)
         if save_single:
+            plt.savefig('%s/%s-lo.pdf' % (fig_dir, tag_names[i]),
+                        dpi=100, bbox_inches='tight')
+                    
+            ax = plt.gca()
+
+            handles, labels = ax.get_legend_handles_labels()
+            plt.legend(handles, labels,
+               loc="upper left", prop={'size': 12})
+
+            plt.savefig('%s/%s-li.pdf' % (fig_dir, tag_names[i]),
+                        dpi=100, bbox_inches='tight')
+
+            ax.get_legend().remove()
             plt.savefig('%s/%s.pdf' % (fig_dir, tag_names[i]),
                         dpi=100, bbox_inches='tight')
+
             plt.figure(figsize=(7, 4))
         fi += 1
     plt.savefig(fig_name, dpi=100, bbox_inches='tight')
