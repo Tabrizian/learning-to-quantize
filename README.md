@@ -6,7 +6,7 @@ Code for submission #1047
 We recommend using Anaconda to install the following packages,
 
 * Python 3.7.1
-* [PyTorch](http://pytorch.org/) **(=1.1.0)**
+* [PyTorch](http://pytorch.org/) **(=1.0.1)**
 * TensorboardX
 * Pyyaml
 * Scipy
