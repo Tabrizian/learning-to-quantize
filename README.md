@@ -12,7 +12,7 @@ We recommend using Anaconda to install the following packages,
 * Scipy
 
 ```
-conda install pytorch==1.0.1 torchvision cudatoolkit=10.1 -c pytorch
+conda install pytorch==1.0.1 torchvision==0.2.2 -c pytorch
 pip install pyyaml scipy tensorboardx
 ```
 
