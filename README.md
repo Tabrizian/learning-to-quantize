@@ -30,7 +30,7 @@ cd ../../
 
 There are examples for training `CIFAR10` and `ImageNet` datasets in the `pjobs` folder. For a description about what each of the flags do, please refer to the [args.py](./args.py).
 
-Each file in the pjobs folder contains all of the experiments for a single job.
+Each file in the pjobs folder contains all of the experiments for a single task. This will create tensorboard files for the experiments in the paper. You can use the [figs_nuq](./notebooks/figs_nuq.ipynb) notebook to generate the graphs from the paper.
 
 ## Generating Different Set of Experiments
 
