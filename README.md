@@ -1,6 +1,6 @@
-# Learning to Quantize
+# Adaptive Gradient Quantization for Data-Parallel SGD 
 
-
+Code for submission #1047
 
 ## Dependencies
 We recommend using Anaconda to install the following packages,
