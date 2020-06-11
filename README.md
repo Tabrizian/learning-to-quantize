@@ -1,18 +1,19 @@
-# Learning to Quantize
+# Adaptive Gradient Quantization for Data-Parallel SGD 
 
-
+Code for submission #1047
 
 ## Dependencies
 We recommend using Anaconda to install the following packages,
 
 * Python 3.7.1
-* [PyTorch](http://pytorch.org/) **(=1.3.1)**
+* [PyTorch](http://pytorch.org/) **(=1.0.1)**
 * TensorboardX
 * Pyyaml
 * Scipy
 
 ```
-conda install pytorch==1.3.1 torchvision cudatoolkit=10.1 -c pytorch
+conda install pytorch==1.0.1 torchvision==0.2.2 -c pytorch
+pip install pyyaml scipy tensorboardx
 ```
 
 ## Cuda kernel installation
@@ -29,7 +30,7 @@ cd ../../
 
 There are examples for training `CIFAR10` and `ImageNet` datasets in the `pjobs` folder. For a description about what each of the flags do, please refer to the [args.py](./args.py).
 
-Each file in the pjobs folder contains all of the experiments for a single job.
+Each file in the pjobs folder contains all of the experiments for a single task. This will create tensorboard files for the experiments in the paper. You can use the [figs_nuq](./notebooks/figs_nuq.ipynb) notebook to generate the graphs from the paper.
 
 ## Generating Different Set of Experiments
 
