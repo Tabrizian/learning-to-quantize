@@ -21,6 +21,25 @@ class Distribution:
             bin_edges = np.concatenate((-np.flip(bin_edges), [0], bin_edges))
         return bin_edges
 
+    def est_var_pgd_adj_levels(self, left_level, current_level, right_level):
+        # From below Eq 10 in the ICML submission
+        # int_c^d (x - c) f(r) dr
+        # = sum_{ind(e_l)}^{ind(e_r)} f(r)
+        #   int_{max(c,e_l)}^{min(e_r,d)} (x - c) f(r) dr
+
+        c = left_level
+        d = right_level
+        e = current_level
+
+        def f(x):
+            return (x - left_level) * self.pdf(x)
+
+        def g(x):
+            return (x - right_level) * self.pdf(x)
+
+        intg = integrate.quad(f, c, e)[0] + integrate.quad(g, e, d)[0]
+        return intg
+
     def est_var_adjacent_levels(self, left_level, right_level):
         # From Eq 6 in the paper
         # int_a^b sigma^2(r) f(r) dr

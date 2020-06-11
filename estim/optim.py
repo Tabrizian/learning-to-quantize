@@ -67,7 +67,8 @@ class OptimizerFactory(object):
 
             isamq = opt.nuq_method == 'amq' or opt.nuq_method == 'amq_nb'
             isalq = opt.nuq_method == 'alq' or opt.nuq_method == 'alq_nb'
-            if isamq or isalq:
+            isalqg = opt.nuq_method == 'alqg' or opt.nuq_method == 'alqg_nb'
+            if isamq or isalq or isalqg:
                 if opt.nuq_parallel == 'ngpu':
                     for qdq in gvar.gest.qdq:
                         qdq.update_levels()

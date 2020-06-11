@@ -61,6 +61,53 @@ def finite_diff_gradient_descent(f, begin, end, x0=None, niters=10, lr=1):
     return x
 
 
+def alq_pgd(initial_levels, grad_dist, epochs, lr=0.1, sym=True):
+
+    losses = []
+    # Assuming last level is 1, setting first dummy level to 0
+    if sym:
+        positive_levels = initial_levels[len(initial_levels) // 2:]
+        new_levels = [0] + list(positive_levels).copy()
+    else:
+        new_levels = list(initial_levels).copy()
+    all_levels = [new_levels.copy()]
+    for epoch in range(epochs):
+
+        for index in range(1, len(new_levels)-1):
+
+            left_level = new_levels[index - 1]
+            right_level = new_levels[index + 1]
+            current_level = new_levels[index]
+            # From equation 10
+            delta = min(current_level - left_level,
+                        right_level - current_level)
+            gradient = grad_dist.est_var_pgd_adj_levels(
+                left_level, current_level, right_level)
+            gradient_abs = min(np.abs(gradient * lr), delta / 2)
+            gradient = np.sign(gradient) * gradient_abs
+            new_levels[index] = new_levels[index] - gradient
+            assert new_levels[index] < right_level and \
+                new_levels[index] > left_level, \
+                "New level is not in the interval"
+        if sym:
+            negative_levels = [-level for level in new_levels]
+            negative_levels.reverse()
+            losses.append(grad_dist.estimate_variance(
+                negative_levels[:-1] + new_levels[1:]))
+            all_levels.append(new_levels.copy())
+        else:
+            losses.append(grad_dist.estimate_variance(new_levels))
+            all_levels.append(new_levels.copy())
+
+    if sym:
+        # dropping dummy level at 0
+        new_levels = new_levels[1:]
+        negative_levels = [-level for level in new_levels]
+        negative_levels.reverse()
+        new_levels = negative_levels + new_levels
+    return new_levels, all_levels, losses
+
+
 def bisection(begin, end, f):
     """Find the root using the bisection
     method.
@@ -265,6 +312,12 @@ class QuantizeMultiBucket(object):
         elif method == 'alq_nb':
             self.levels = get_exp_levels(bits, multiplier)
             self.norm_type = 'fro'
+        elif method == 'alqg':
+            self.levels = get_exp_levels(bits, multiplier)
+            self.norm_type = 'fro'
+        elif method == 'alqg_nb':
+            self.levels = get_exp_levels(bits, multiplier)
+            self.norm_type = 'fro'
         elif method == 'trn':
             self.levels = get_ternary_levels()
             self.norm_type = float('inf')
@@ -298,9 +351,9 @@ class QuantizeMultiBucket(object):
         sigma = torch.sqrt(torch.tensor(self.variance)).cpu().item()
         self.grad_dist_nb = CondNormalTruncHist(
             norms['means'], norms['sigmas'], norms['norms'], -interval,
-            interval, nbins=100000, bin_type='linear')
+            interval, nbins=50000, bin_type='linear')
         self.grad_dist_nl = TruncNorm(
-            mean, sigma, -interval, interval, nbins=100000, bin_type='linear')
+            mean, sigma, -interval, interval, nbins=50000, bin_type='linear')
 
         self.error = self.grad_dist_nb.estimate_variance(self.levels.cpu())
 
@@ -356,6 +409,37 @@ class QuantizeMultiBucket(object):
             candidate_losses = np.asarray(
                 [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
             self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+
+        elif self.method == 'alqg_nb':
+            epochs = self.epochs
+            quantile_levels = get_quantile_levels(bits, grad_dist_nb)
+            levels_qua, _, losses_qua = alq_pgd(
+                quantile_levels, grad_dist_nb, epochs)
+            levels_uniform, _, losses_uni = alq_pgd(
+                uniform_levels, grad_dist_nb, epochs)
+            levels_exp, _, losses_exp = alq_pgd(
+                exp_levels, grad_dist_nb, epochs)
+            candidate_levels = np.asarray(
+                [levels_qua, levels_uniform, levels_exp])
+            candidate_losses = np.asarray(
+                [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+            self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+
+        elif self.method == 'alqg':
+            epochs = self.epochs
+            quantile_levels = get_quantile_levels(bits, grad_dist_nb)
+            levels_qua, _, losses_qua = alq_pgd(
+                quantile_levels, grad_dist_nl, epochs)
+            levels_uniform, _, losses_uni = alq_pgd(
+                uniform_levels, grad_dist_nl, epochs)
+            levels_exp, _, losses_exp = alq_pgd(
+                exp_levels, grad_dist_nl, epochs)
+            candidate_levels = np.asarray(
+                [levels_qua, levels_uniform, levels_exp])
+            candidate_losses = np.asarray(
+                [losses_qua[-1], losses_uni[-1], losses_exp[-1]])
+            self.levels = candidate_levels[np.argsort(candidate_losses)][0]
+
 
         elif self.method == 'amq':
             initial_points = []
