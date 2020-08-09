@@ -485,6 +485,15 @@ class QuantizeMultiBucket(object):
 
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
+    
+    def gradient_clipping(self, x_normalized, c=2.5):
+        # c is the clipping hyperparamter
+        # we use c equal to 2.5 as mentioned in the TernGrad 
+        # paper
+        sigma = self.grad_dist_nl.sigma
+        indexes = torch.abs(x_normalized) > (c * sigma)
+        x_normalized[indexes] = torch.sign(x_normalized[indexes]) * c * sigma
+
 
     def quantize(self, x, ig_sm_bkts):
         """The main quantization function. If ig_sm_bkts is enabled
@@ -502,16 +511,24 @@ class QuantizeMultiBucket(object):
         xv = xv.view(-1, bucket_size)
         norm = xv.norm(p=self.norm_type, dim=1, keepdim=True).expand(
             xv.shape[0], xv.shape[1]).contiguous().view(-1).contiguous()
-
+        if self.method == 'trn':
+            normalized_x = xv.view(-1) / (norm + 1e-7)
+            self.gradient_clipping(normalized_x)
+            xv = (normalized_x * (norm + 1e-7)).view(-1, bucket_size)
+            
         if ig_sm_bkts:
             if xv.shape[0] > 1:
                 q = torch.zeros_like(xv)
                 r = torch.randint_like(xv, 1000001).long()
                 self.qdq.qdqGPU(xv[:-1], norm[:-1], q[:-1], r[:-1])
-                return torch.cat(
-                    [q[:-1].view(-1),
-                     xv[-1][:-num_tail].view(-1)]
-                ).view(x.shape)
+                if num_tail > 0:
+                    return torch.cat(
+                        [q[:-1].view(-1),
+                         xv[-1][:-num_tail].view(-1)]
+                    ).view(x.shape)
+                else:
+                    return q.view(-1).view(x.shape)
+
             else:
                 return xv[-1][:-num_tail].view(x.shape)
         else:
