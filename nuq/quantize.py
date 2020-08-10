@@ -335,6 +335,7 @@ class QuantizeMultiBucket(object):
         self.amq_lr = kwargs['amq_lr']
         self.amq_epochs = kwargs['amq_epochs']
         self.symmetric = kwargs['symmetric']
+        self.clipping = kwargs['clipping']
         self.inv = kwargs['inv']
         self.levels = torch.as_tensor(self.levels, dtype=torch.float32).cuda()
         self.qdq = QDQ(self.levels)
@@ -490,7 +491,7 @@ class QuantizeMultiBucket(object):
         # c is the clipping hyperparamter
         # we use c equal to 2.5 as mentioned in the TernGrad 
         # paper
-        sigma = self.grad_dist_nl.sigma
+        sigma = torch.sqrt(torch.var(x_normalized))
         indexes = torch.abs(x_normalized) > (c * sigma)
         x_normalized[indexes] = torch.sign(x_normalized[indexes]) * c * sigma
 
@@ -511,7 +512,7 @@ class QuantizeMultiBucket(object):
         xv = xv.view(-1, bucket_size)
         norm = xv.norm(p=self.norm_type, dim=1, keepdim=True).expand(
             xv.shape[0], xv.shape[1]).contiguous().view(-1).contiguous()
-        if self.method == 'trn':
+        if self.clipping:
             normalized_x = xv.view(-1) / (norm + 1e-7)
             self.gradient_clipping(normalized_x)
             xv = (normalized_x * (norm + 1e-7)).view(-1, bucket_size)
