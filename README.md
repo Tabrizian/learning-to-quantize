@@ -1,6 +1,6 @@
 # Adaptive Gradient Quantization for Data-Parallel SGD 
 
-Code for "Adaptive Gradient Quantization for Data-Parallel SGD"
+Code for [Adaptive Gradient Quantization for Data-Parallel SGD](https://arxiv.org/pdf/2010.12460.pdf)
 
 ## Dependencies
 We recommend using Anaconda to install the following packages,
@@ -76,3 +76,14 @@ The important function in this file is [snap_online_mean](https://github.com/Tab
 This function also needs to calculate the mean variance and mean of the gradient samples for the norm-less methods.
 
 [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+
+### Citation
+
+@misc{adaptive2020,
+      title={Adaptive Gradient Quantization for Data-Parallel SGD}, 
+      author={Fartash Faghri and Iman Tabrizian and Ilia Markov and Dan Alistarh and Daniel Roy and Ali Ramezani-Kebrya},
+      year={2020},
+      eprint={2010.12460},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
