@@ -81,12 +81,11 @@ This function also needs to calculate the mean variance and mean of the gradient
 
 
 ```bibtex
-@misc{adaptive2020,
-      title={Adaptive Gradient Quantization for Data-Parallel SGD}, 
-      author={Fartash Faghri and Iman Tabrizian and Ilia Markov and Dan Alistarh and Daniel Roy and Ali Ramezani-Kebrya},
-      year={2020},
-      eprint={2010.12460},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{learningtoquantize,
+  title={Adaptive Gradient Quantization for Data-Parallel SGD},
+  author={Faghri, Fartash and Tabrizian, Iman and Markov, Ilia and Alistarh, Dan and Roy, Daniel M and Ramezani-Kebrya, Ali},
+  journal={Advances in Neural Information Processing Systems},
+  volume={33},
+  year={2020}
 }
 ```
