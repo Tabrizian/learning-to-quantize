@@ -1,6 +1,6 @@
 # Adaptive Gradient Quantization for Data-Parallel SGD 
 
-Code for [Adaptive Gradient Quantization for Data-Parallel SGD](https://arxiv.org/pdf/2010.12460.pdf) to appear in NeurIPS 2020.
+Code for [Adaptive Gradient Quantization for Data-Parallel SGD](https://arxiv.org/pdf/2010.12460.pdf) NeurIPS 2020.
 
 ## Dependencies
 We recommend using Anaconda to install the following packages,
